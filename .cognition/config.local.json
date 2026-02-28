@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Exec(npm run)",
+      "Exec(git status)",
+      "Exec(git diff)",
+      "Exec(git)",
+      "Exec(npm)",
+      "Exec(mkdir)",
+      "Exec(node)"
+    ]
+  }
+}
