@@ -1294,8 +1294,10 @@ function App() {
   const [actionStream, setActionStream] = useState<ActionEntry[]>([])
   const [isJobsOpen, setIsJobsOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [colorTheme, setColorTheme] = useState<'dark' | 'light'>(
-    () => (localStorage.getItem('minion.theme') as 'dark' | 'light') ?? 'dark',
+  const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
+    () =>
+      (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
+      'dark',
   )
   const [devinApiKey, setDevinApiKey] = useState(DEFAULT_DEVIN_API_KEY)
   const [devinOrgId, setDevinOrgId] = useState(DEFAULT_DEVIN_ORG_ID)
@@ -2803,7 +2805,6 @@ function App() {
       retryable: true,
       retryPrompt: prompt,
     })
-    setIsJobsOpen(true)
     showToast('Devin assessing...')
 
     try {
@@ -2897,7 +2898,6 @@ function App() {
       retryable: true,
       retryPrompt: prompt,
     })
-    setIsJobsOpen(true)
     showToast(`Starting Devin on ${repo}...`)
 
     try {
@@ -2990,7 +2990,6 @@ function App() {
       retryable: true,
       retryPrompt: prompt,
     })
-    setIsJobsOpen(true)
     showToast('Devin assessing...')
 
     try {
@@ -3263,8 +3262,7 @@ function App() {
       updateAction(actionId, { outcome: 'success' })
       watchMergeConflictResolution(pr, pullRequestKey)
       if (sessionUrl) {
-        setIsJobsOpen(true)
-      }
+          }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to create Devin session.'
@@ -4821,6 +4819,13 @@ function App() {
                       onClick={() => setColorTheme('light')}
                     >
                       Light
+                    </button>
+                    <button
+                      type="button"
+                      className={`theme-option${colorTheme === 'aurora' ? ' is-active' : ''}`}
+                      onClick={() => setColorTheme('aurora')}
+                    >
+                      Aurora
                     </button>
                   </div>
                 </div>
