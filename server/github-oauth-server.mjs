@@ -210,7 +210,7 @@ const exchangeOauthCode = async (code, state) => {
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      'User-Agent': 'elysium-github-oauth-server',
+      'User-Agent': 'lysium-github-oauth-server',
     },
     body: JSON.stringify({
       client_id: CLIENT_ID,
@@ -244,7 +244,7 @@ const fetchGithubLogin = async (accessToken) => {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${accessToken}`,
       'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'elysium-github-oauth-server',
+      'User-Agent': 'lysium-github-oauth-server',
     },
   })
 

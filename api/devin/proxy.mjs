@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     headers: {
       Authorization: `Bearer ${session.apiKey}`,
       'Content-Type': req.headers['content-type'] ?? 'application/json',
-      'User-Agent': 'elysium',
+      'User-Agent': 'lysium',
     },
     body,
   })

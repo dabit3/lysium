@@ -76,7 +76,7 @@ export default async function handler(req, res) {
 
       try {
         const check = await fetch(endpoint, {
-          headers: { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'elysium' },
+          headers: { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'lysium' },
         })
         if (check.status === 401 || check.status === 403) {
           res.status(401).json({ error: 'Invalid Devin API key.' })

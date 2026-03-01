@@ -43,7 +43,7 @@ const exchangeCode = async (code, state) => {
   const { clientId, clientSecret, redirectUri } = cfg()
   const res = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'elysium-github-oauth-server' },
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'lysium-github-oauth-server' },
     body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code, state, redirect_uri: redirectUri }),
   })
   const data = await res.json()
@@ -54,7 +54,7 @@ const exchangeCode = async (code, state) => {
 
 const fetchUserInfo = async (token) => {
   const res = await fetch('https://api.github.com/user', {
-    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'elysium-github-oauth-server' },
+    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'lysium-github-oauth-server' },
   })
   if (!res.ok) return { login: null, userId: null }
   const data = await res.json()

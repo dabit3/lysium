@@ -5,7 +5,6 @@ import './App.css'
 import {
   X,
   Check,
-  GitPullRequestDraft,
   Settings,
   Activity,
   ArrowDown,
@@ -14,6 +13,8 @@ import {
   BrainCircuit,
   Eye,
   Rocket,
+  RefreshCw,
+  Github,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -229,10 +230,37 @@ const GITHUB_OAUTH_DISCONNECT_URL = '/api/github/oauth/disconnect'
 const HAS_GITHUB_OAUTH_CONFIG = true
 const MAX_CARD_BODY_LINES = 120
 const MAX_CARD_CONTEXT_SUMMARY_LINES = 24
+const DESKTOP_LAYOUT_MEDIA_QUERY = '(min-width: 1120px)'
 
 const ASSESSED_ISSUES_STORAGE_KEY = 'minion.assessed_issues.v1'
 const ASSESSED_PRS_STORAGE_KEY = 'minion.assessed_prs.v1'
 const GITHUB_SCOPE_STORAGE_KEY = 'minion.github_scope.v1'
+const DEVINS_MACHINE_REPO_LABEL = "Devin's machine"
+const JOBS_STORAGE_KEY = 'minion.jobs.v1'
+const JOBS_RETENTION_MS = 1000 * 60 * 60 * 24 * 7
+
+const loadPersistedJobs = (): JobEntry[] => {
+  try {
+    const raw = window.localStorage.getItem(JOBS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as JobEntry[]
+    const cutoff = Date.now() - JOBS_RETENTION_MS
+    return parsed
+      .filter((job) => job.status !== 'running' && job.createdAt > cutoff)
+  } catch {
+    return []
+  }
+}
+
+const savePersistedJobs = (jobs: JobEntry[]) => {
+  try {
+    const toSave = jobs.filter((job) => job.status !== 'running')
+    window.localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(toSave))
+  } catch {}
+}
+const DevinLogo = ({ size = 16 }: { size?: number }) => (
+  <img src="/devin.png" alt="" aria-hidden="true" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+)
 const ASSESSED_ISSUES_RETENTION_MS = 1000 * 60 * 60 * 24 * 90
 
 const normalizeSummaryLine = (line: string) =>
@@ -1227,12 +1255,25 @@ const getSwipeAction = (tab: TabKey, direction: SwipeDirection): SwipeAction => 
   if (tab === 'issues') {
     return direction === 'left'
       ? { label: 'Close Issue', icon: <X size={18} />, tone: 'danger' }
-      : { label: 'Create PR', icon: <GitPullRequestDraft size={18} />, tone: 'accent' }
+      : { label: 'Create PR', icon: <DevinLogo size={18} />, tone: 'accent' }
   }
 
   return direction === 'left'
     ? { label: 'Close PR', icon: <X size={18} />, tone: 'danger' }
     : { label: 'Merge PR', icon: <Check size={18} />, tone: 'highlight' }
+}
+
+const isEditableTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  if (target.isContentEditable) {
+    return true
+  }
+
+  const tagName = target.tagName.toLowerCase()
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select'
 }
 
 const getSwipeToast = (
@@ -1278,6 +1319,7 @@ function App() {
     null,
   )
   const [swipeExitDurationMs, setSwipeExitDurationMs] = useState(210)
+  const [isDesktopButtonSwipe, setIsDesktopButtonSwipe] = useState(false)
 
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [toastUndoCallback, setToastUndoCallback] = useState<(() => void) | null>(null)
@@ -1288,10 +1330,14 @@ function App() {
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false)
   const [commentBody, setCommentBody] = useState('')
   const [isPostingComment, setIsPostingComment] = useState(false)
-  const [jobs, setJobs] = useState<JobEntry[]>([])
+  const [jobs, setJobs] = useState<JobEntry[]>(() => loadPersistedJobs())
   const [actionStream, setActionStream] = useState<ActionEntry[]>([])
   const [isJobsOpen, setIsJobsOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia(DESKTOP_LAYOUT_MEDIA_QUERY).matches,
+  )
+  const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
   const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
     () =>
       (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
@@ -1323,7 +1369,7 @@ function App() {
   const [pullRequestCodeLookup, setPullRequestCodeLookup] = useState<
     Record<string, PullRequestCodeEntry>
   >({})
-  const [selectedRepo, setSelectedRepo] = useState('')
+  const [selectedRepo, setSelectedRepo] = useState(DEVINS_MACHINE_REPO_LABEL)
   const [repoFilterQuery, setRepoFilterQuery] = useState('')
   const [repoRequestPrompt, setRepoRequestPrompt] = useState('')
   const [isCreatingRepoRequest, setIsCreatingRepoRequest] = useState(false)
@@ -1349,7 +1395,12 @@ function App() {
   const dragLastSampleRef = useRef({ x: 0, time: 0 })
   const toastTimeoutRef = useRef<number | null>(null)
   const pendingUndoRef = useRef<{ timeoutId: number; cancelled: boolean } | null>(null)
-  const nextJobIdRef = useRef(1)
+  const nextJobIdRef = useRef(
+    (() => {
+      const persisted = loadPersistedJobs()
+      return persisted.length > 0 ? Math.max(...persisted.map((j) => j.id)) + 1 : 1
+    })()
+  )
   const nextActionIdRef = useRef(1)
   const mergeConflictPollingLookupRef = useRef<Record<string, true>>({})
   const syncGithubFeedRef = useRef<
@@ -1381,14 +1432,18 @@ function App() {
 
     return Array.from(repoSet).sort((left, right) => left.localeCompare(right))
   }, [issues, pullRequests])
-  const filteredRepos = useMemo(() => {
+  const repoOptions = useMemo(
+    () => [DEVINS_MACHINE_REPO_LABEL, ...availableRepos],
+    [availableRepos],
+  )
+  const filteredRepoOptions = useMemo(() => {
     const normalizedFilter = repoFilterQuery.trim().toLowerCase()
     if (!normalizedFilter) {
-      return availableRepos
+      return repoOptions
     }
 
-    return availableRepos.filter((repo) => repo.toLowerCase().includes(normalizedFilter))
-  }, [availableRepos, repoFilterQuery])
+    return repoOptions.filter((repo) => repo.toLowerCase().includes(normalizedFilter))
+  }, [repoOptions, repoFilterQuery])
   const activeIssue = issues[0]
   const activePr = pullRequests[0]
   const activeIssueAssessmentKey = activeIssue ? toIssueAssessmentKey(activeIssue) : ''
@@ -1430,6 +1485,23 @@ function App() {
     (count, job) => count + (job.status === 'running' ? 1 : 0),
     0,
   )
+  const desktopIssueCountLabel =
+    isDesktopLayout && hasSyncedGithubFeed ? `Issues (${issues.length})` : 'Issues'
+  const desktopPullRequestCountLabel =
+    isDesktopLayout && hasSyncedGithubFeed ? `PRs (${pullRequests.length})` : 'PRs'
+  const desktopSwipeTab: TabKey = activeTab === 'issues' ? 'issues' : 'pullRequests'
+  const desktopLeftSwipeAction =
+    activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'left')
+  const desktopRightSwipeAction =
+    activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'right')
+  const desktopDownSwipeAction =
+    activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'down')
+  const canTriggerDesktopSwipe =
+    isDesktopLayout &&
+    hasSyncedGithubFeed &&
+    activeTab !== 'code' &&
+    !isDesktopActivityOpen &&
+    Boolean(topCard)
   const hasApiKey = hasDevinSession || devinApiKey.trim().length > 0
   const hasDevinOrgId = devinOrgId.trim().length > 0
   const hasGithubScope = githubSearchScope.trim().length > 0
@@ -1441,6 +1513,9 @@ function App() {
     hasGithubScope
   const showStartupLoadingState = !hasSyncedGithubFeed && isSyncingGithubFeed
   const shouldShowCredentialSetup = !hasSyncedGithubFeed && !showStartupLoadingState
+  const showDesktopLeftNav = isDesktopLayout && hasSyncedGithubFeed
+  const showDesktopSettingsPanel = showDesktopLeftNav && isSettingsOpen
+  const showDesktopMainActivity = showDesktopLeftNav && isDesktopActivityOpen
 
   const showToast = (message: string, onUndo?: () => void, timeoutMs?: number) => {
     setToastMessage(message)
@@ -1468,6 +1543,7 @@ function App() {
     setIsDragging(false)
     setIsAnimatingOut(false)
     setSwipeDirection(null)
+    setIsDesktopButtonSwipe(false)
   }
 
   const removeTopCard = (tab: TabKey) => {
@@ -2616,7 +2692,7 @@ function App() {
       return true
     }
 
-    return tab === 'issues' && direction === 'left'
+    return tab === 'issues'
   }
 
   const getSwipeExitDurationMs = (
@@ -2625,6 +2701,11 @@ function App() {
   ) => {
     if (prefersReducedMotion) {
       return 90
+    }
+
+    const isButtonTriggered = offset.x === 0 && offset.y === 0
+    if (isDesktopLayout && isButtonTriggered) {
+      return 420
     }
 
     const horizontalTravel = Math.max(swipeOutDistance - Math.abs(offset.x), 80)
@@ -2650,9 +2731,11 @@ function App() {
     const undoTimeoutMs = tabAtSwipe === 'pullRequests' ? 3000 : 4000
     const exitDurationMs = getSwipeExitDurationMs(direction, dragOffsetRef.current)
 
+    const buttonTriggered = dragOffsetRef.current.x === 0 && dragOffsetRef.current.y === 0
     setSwipeExitDurationMs(exitDurationMs)
     setSwipeDirection(direction)
     setIsAnimatingOut(true)
+    setIsDesktopButtonSwipe(isDesktopLayout && buttonTriggered)
     setIsDragging(false)
 
     window.setTimeout(() => {
@@ -2896,8 +2979,9 @@ function App() {
       return
     }
 
-    const repo = normalizeRepoPath(selectedRepo)
-    if (!repo) {
+    const isDevinsMachineTarget = selectedRepo === DEVINS_MACHINE_REPO_LABEL
+    const repo = isDevinsMachineTarget ? '' : normalizeRepoPath(selectedRepo)
+    if (!isDevinsMachineTarget && !repo) {
       showToast('Select a repository first.')
       return
     }
@@ -2909,27 +2993,39 @@ function App() {
     }
 
     setIsCreatingRepoRequest(true)
-    const prompt = [
-      `Repository: ${repo}`,
-      `Maintainer request: ${request}`,
-      'Implement the requested feature in this repository and open a pull request.',
-      'Keep scope focused, add or update tests when appropriate, and summarize any risks.',
-      'Return the PR URL, change summary, and verification steps.',
-    ].join('\n\n')
-    const actionId = addAction(`Create repo PR in ${repo}`, 'pending')
-    const jobId = addJob('Repo PR request', repo, {
+    const targetLabel = isDevinsMachineTarget ? DEVINS_MACHINE_REPO_LABEL : repo
+    const prompt = isDevinsMachineTarget
+      ? [
+          `Workspace: ${DEVINS_MACHINE_REPO_LABEL}`,
+          `Maintainer request: ${request}`,
+          'Use Devin\'s existing repository context to identify the correct repository, implement the request, and open a pull request.',
+          'If repository context is ambiguous, choose the best matching repository and proceed.',
+          'Keep scope focused, add or update tests when appropriate, and summarize any risks.',
+          'Return the PR URL, chosen repository, change summary, and verification steps.',
+        ].join('\n\n')
+      : [
+          `Repository: ${repo}`,
+          `Maintainer request: ${request}`,
+          'Implement the requested feature in this repository and open a pull request.',
+          'Keep scope focused, add or update tests when appropriate, and summarize any risks.',
+          'Return the PR URL, change summary, and verification steps.',
+        ].join('\n\n')
+    const actionId = addAction(`Create repo PR in ${targetLabel}`, 'pending')
+    const jobId = addJob('Repo PR request', targetLabel, {
       retryable: true,
       retryPrompt: prompt,
     })
-    showToast(`Starting Devin on ${repo}...`)
+    showToast(`Starting Devin on ${targetLabel}...`)
 
     try {
-      const repoTag = repo
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
+      const repoTag = isDevinsMachineTarget
+        ? 'devins-machine'
+        : repo
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
       const session = await createDevinSession(prompt, {
-        title: `Repo request: ${repo}`,
+        title: `Repo request: ${targetLabel}`,
         tags: ['repo-pr-request', repoTag].filter((tag) => tag.length > 0),
         structuredOutputSchema: {
           type: 'object',
@@ -3517,6 +3613,7 @@ function App() {
   const handleClearLocalStorage = () => {
     setAssessedIssueLookup({})
     setAssessedPrLookup({})
+    setJobs([])
 
     if (typeof window === 'undefined') {
       return
@@ -3551,10 +3648,49 @@ function App() {
     setActiveTab(nextTab)
   }
 
+  const handleDesktopNavTabSelect = (nextTab: TabKey) => {
+    setIsDesktopActivityOpen(false)
+    handleTabChange(nextTab)
+  }
+
   useEffect(() => {
     document.documentElement.dataset.theme = colorTheme
     localStorage.setItem('minion.theme', colorTheme)
   }, [colorTheme])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const media = window.matchMedia(DESKTOP_LAYOUT_MEDIA_QUERY)
+    const syncDesktopLayout = () => {
+      setIsDesktopLayout(media.matches)
+    }
+
+    syncDesktopLayout()
+    media.addEventListener('change', syncDesktopLayout)
+
+    return () => {
+      media.removeEventListener('change', syncDesktopLayout)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isDesktopLayout) {
+      setIsDesktopActivityOpen(false)
+      return
+    }
+
+    setIsSettingsOpen(false)
+    setIsJobsOpen(false)
+  }, [isDesktopLayout])
+
+  useEffect(() => {
+    if (!hasSyncedGithubFeed) {
+      setIsDesktopActivityOpen(false)
+    }
+  }, [hasSyncedGithubFeed])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -3569,6 +3705,10 @@ function App() {
       }
     } catch {}
   }, [githubSearchScope])
+
+  useEffect(() => {
+    savePersistedJobs(jobs)
+  }, [jobs])
 
   useEffect(() => {
     void refreshGithubOauthSessionToken({ silent: true })
@@ -3607,15 +3747,63 @@ function App() {
   }, [hasGithubOauthSession, isLoadingDevinSession, hasApiKey])
 
   useEffect(() => {
-    if (filteredRepos.length === 0) {
+    if (!isDesktopLayout || !hasSyncedGithubFeed || activeTab === 'code') {
+      return
+    }
+
+    const handleDesktopKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isCommentModalOpen ||
+        isEditableTarget(event.target) ||
+        !canTriggerDesktopSwipe
+      ) {
+        return
+      }
+
+      const direction: SwipeDirection | null =
+        event.key === 'ArrowLeft'
+          ? 'left'
+          : event.key === 'ArrowRight'
+            ? 'right'
+            : event.key === 'ArrowDown'
+              ? 'down'
+              : null
+
+      if (!direction) {
+        return
+      }
+
+      event.preventDefault()
+      commitSwipe(direction)
+    }
+
+    window.addEventListener('keydown', handleDesktopKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleDesktopKeyDown)
+    }
+  }, [
+    activeTab,
+    canTriggerDesktopSwipe,
+    commitSwipe,
+    hasSyncedGithubFeed,
+    isCommentModalOpen,
+    isDesktopLayout,
+  ])
+
+  useEffect(() => {
+    if (filteredRepoOptions.length === 0) {
       setSelectedRepo('')
       return
     }
 
     setSelectedRepo((previous) =>
-      previous && filteredRepos.includes(previous) ? previous : filteredRepos[0],
+      previous && filteredRepoOptions.includes(previous) ? previous : filteredRepoOptions[0],
     )
-  }, [filteredRepos])
+  }, [filteredRepoOptions])
 
   useEffect(() => {
     setPullRequestContentView('summary')
@@ -4016,96 +4204,132 @@ function App() {
       <header className="code-panel-header">
         <h2>Repositories</h2>
         <p>
-          Select a repository, describe what Devin should build, then press Enter to
-          start a PR session.
+          Start with Devin's machine (default context) or pick a repository, then describe
+          what Devin should build and press Enter to start a PR session.
         </p>
       </header>
 
-      {availableRepos.length === 0 ? (
-        <div className="code-empty-state">
-          <p>No repositories are available yet.</p>
-          <p>Sync GitHub feed to load repositories from open issues and pull requests.</p>
-        </div>
-      ) : (
-        <>
-          <div className="code-browser">
-            <label className="repo-filter-field">
-              <span>Filter repositories</span>
-              <input
-                type="search"
-                className="repo-filter-input"
-                value={repoFilterQuery}
-                onChange={(event) => setRepoFilterQuery(event.target.value)}
-                placeholder="Search by owner/repo"
-                autoComplete="off"
-              />
-            </label>
-
-            {filteredRepos.length > 0 ? (
-              <div className="code-list" role="listbox" aria-label="Available repositories">
-                {filteredRepos.map((repo) => {
-                  const isSelected = repo === selectedRepo
-                  return (
-                    <button
-                      key={repo}
-                      type="button"
-                      role="option"
-                      aria-selected={isSelected}
-                      className={`repo-list-item ${isSelected ? 'is-selected' : ''}`.trim()}
-                      onClick={() => setSelectedRepo(repo)}
-                    >
-                      {repo}
-                    </button>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="code-filter-empty">
-                <p>
-                  No repositories match <span>{repoFilterQuery.trim() || 'that search'}</span>.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <form
-            className="repo-request-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void handleCreateRepoPullRequest()
-            }}
-          >
-            <p className="repo-request-meta">
-              Target repository: <span>{selectedRepo || 'Select a repository'}</span>
-            </p>
-            <textarea
-              className="repo-request-input"
-              value={repoRequestPrompt}
-              onChange={(event) => setRepoRequestPrompt(event.target.value)}
-              placeholder="e.g. add feature xyz and include tests"
-              disabled={isCreatingRepoRequest || !selectedRepo}
-              rows={4}
+      <>
+        <div className="code-browser">
+          <label className="repo-filter-field">
+            <span>Filter repositories</span>
+            <input
+              type="search"
+              className="repo-filter-input"
+              value={repoFilterQuery}
+              onChange={(event) => setRepoFilterQuery(event.target.value)}
+              placeholder="Search by owner/repo"
+              autoComplete="off"
             />
-            <button
-              type="submit"
-              className="fab-button primary repo-request-button"
-              disabled={
-                isCreatingRepoRequest || !selectedRepo || repoRequestPrompt.trim().length === 0
-              }
-            >
-              {isCreatingRepoRequest ? (
-                <span className="spinner" aria-hidden="true" />
-              ) : (
-                <Rocket size={14} aria-hidden="true" />
-              )}
-              <span>
-                {isCreatingRepoRequest ? 'Starting Devin Session...' : 'SHIP'}
-              </span>
-            </button>
-          </form>
-        </>
-      )}
+          </label>
+
+          {filteredRepoOptions.length > 0 ? (
+            <div className="code-list" role="listbox" aria-label="Available repositories">
+              {filteredRepoOptions.map((repo) => {
+                const isSelected = repo === selectedRepo
+                const isDevinsMachine = repo === DEVINS_MACHINE_REPO_LABEL
+                return (
+                  <button
+                    key={repo}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    className={`repo-list-item ${isSelected ? 'is-selected' : ''} ${isDevinsMachine ? 'repo-list-item-devins-machine' : ''}`.trim()}
+                    onClick={() => setSelectedRepo(repo)}
+                  >
+                    {isDevinsMachine ? (
+                      <>
+                        <img src="/devin.png" alt="" className="repo-list-devin-logo" aria-hidden="true" />
+                        {repo}
+                      </>
+                    ) : repo}
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="code-filter-empty">
+              <p>
+                No repositories match <span>{repoFilterQuery.trim() || 'that search'}</span>.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <form
+          className="repo-request-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void handleCreateRepoPullRequest()
+          }}
+        >
+          <p className="repo-request-meta">
+            {selectedRepo === DEVINS_MACHINE_REPO_LABEL ? (
+              <span>Using Devin's machine context</span>
+            ) : (
+              <>
+                Target repository: <span>{selectedRepo || 'Select a repository'}</span>
+              </>
+            )}
+          </p>
+          <textarea
+            className="repo-request-input"
+            value={repoRequestPrompt}
+            onChange={(event) => setRepoRequestPrompt(event.target.value)}
+            placeholder="e.g. add feature xyz and include tests"
+            disabled={isCreatingRepoRequest || !selectedRepo}
+            rows={4}
+          />
+          <button
+            type="submit"
+            className="fab-button primary repo-request-button"
+            disabled={
+              isCreatingRepoRequest || !selectedRepo || repoRequestPrompt.trim().length === 0
+            }
+          >
+            {isCreatingRepoRequest ? (
+              <span className="spinner" aria-hidden="true" />
+            ) : (
+              <Rocket size={14} aria-hidden="true" />
+            )}
+            <span>
+              {isCreatingRepoRequest ? 'Starting Devin Session...' : 'SHIP'}
+            </span>
+          </button>
+        </form>
+      </>
     </motion.section>
+  )
+
+  const renderThemeToggleSection = (sectionClassName?: string) => (
+    <div className={`theme-toggle-section ${sectionClassName ?? ''}`.trim()}>
+      <div className="auth-panel-header">
+        <h3>Theme</h3>
+      </div>
+      <div className="theme-toggle-row">
+        <button
+          type="button"
+          className={`theme-option${colorTheme === 'dark' ? ' is-active' : ''}`}
+          onClick={() => setColorTheme('dark')}
+        >
+          Dark
+        </button>
+        <button
+          type="button"
+          className={`theme-option${colorTheme === 'light' ? ' is-active' : ''}`}
+          onClick={() => setColorTheme('light')}
+        >
+          Light
+        </button>
+        <button
+          type="button"
+          className={`theme-option${colorTheme === 'aurora' ? ' is-active' : ''}`}
+          onClick={() => setColorTheme('aurora')}
+        >
+          Aurora
+        </button>
+      </div>
+    </div>
   )
 
   const renderAuthPanel = (panelClassName?: string) => (
@@ -4217,7 +4441,7 @@ function App() {
           </label>
         ) : null}
 
-        {hasGithubOauthSession ? (
+        {hasGithubOauthSession && !isDesktopLayout ? (
           <button
             type="button"
             className="fab-button primary auth-sync-button"
@@ -4302,6 +4526,123 @@ function App() {
     </section>
   )
 
+  const renderJobsSectionContent = (options?: { closeOnLinkClick?: boolean }) => {
+    const linkClickHandler = options?.closeOnLinkClick ? () => setIsJobsOpen(false) : undefined
+
+    return (
+      <>
+        <div className="jobs-section-header">
+          <h4>Sessions & Jobs</h4>
+          <span>{jobs.length}</span>
+        </div>
+
+        {jobs.length === 0 ? (
+          <p className="jobs-empty">No sessions or jobs yet.</p>
+        ) : (
+          <ul className="jobs-list">
+            {jobs.map((job) => (
+              <li key={job.id} className={`job-item status-${job.status}`}>
+                <div className="job-row">
+                  <p className="job-label">{job.label}</p>
+                  <span className={`job-status ${job.status}`}>{job.status}</span>
+                </div>
+
+                <p className="job-target">{job.target}</p>
+                <p className="job-message">{job.message}</p>
+
+                <div className="job-meta-row">
+                  <span className="job-time">{formatRelativeTime(job.createdAt)}</span>
+
+                  <div className="job-meta-actions">
+                    {job.pullRequestUrl ? (
+                      <a
+                        href={job.pullRequestUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="job-session-link job-pr-link"
+                        onClick={linkClickHandler}
+                      >
+                        View PR
+                      </a>
+                    ) : null}
+
+                    {job.sessionUrl ? (
+                      <a
+                        href={job.sessionUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="job-session-link"
+                        onClick={linkClickHandler}
+                      >
+                        {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
+                      </a>
+                    ) : null}
+
+                    {job.status === 'failed' && job.retryable ? (
+                      <button
+                        type="button"
+                        className="fab-button secondary job-retry"
+                        onClick={() => {
+                          void handleRetryJob(job.id)
+                        }}
+                      >
+                        Retry
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    )
+  }
+
+  const renderRecentActionsSectionContent = () => (
+    <>
+      <div className="jobs-section-header">
+        <h4>Recent Actions</h4>
+        <span>{actionStream.length}</span>
+      </div>
+
+      {actionStream.length === 0 ? (
+        <p className="jobs-empty">No actions yet.</p>
+      ) : (
+        <ul className="jobs-actions-list">
+          {actionStream.slice(0, 18).map((action) => (
+            <li key={action.id} className="action-item">
+              <div>
+                <p className="action-label">{action.label}</p>
+                <span className="action-time">{formatRelativeTime(action.createdAt)}</span>
+              </div>
+              <span className={`action-outcome ${action.outcome}`}>{action.outcome}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
+
+  const renderActivityPanel = (panelClassName?: string) => (
+    <section
+      className={`auth-panel ${panelClassName ?? ''}`.trim()}
+      aria-label="Sessions, jobs, and recent actions"
+    >
+      <div className="auth-panel-header">
+        <h3>Activity</h3>
+      </div>
+      <div className="jobs-drawer-content desktop-activity-content">
+        <section className="jobs-drawer-section" aria-label="Sessions and jobs">
+          {renderJobsSectionContent()}
+        </section>
+        <section className="jobs-drawer-section" aria-label="Recent actions">
+          {renderRecentActionsSectionContent()}
+        </section>
+      </div>
+    </section>
+  )
+
   return (
     <div className="minion-app">
       {toastMessage ? (
@@ -4333,56 +4674,232 @@ function App() {
       ) : null}
 
       <main className="app-shell">
-        <header className="top-header">
-          <div className="top-toggle" aria-label="Select triage mode">
-            <button
-              type="button"
-              className={activeTab === 'code' ? 'is-active' : ''}
-              onClick={() => handleTabChange('code')}
-            >
-              Code
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'issues' ? 'is-active' : ''}
-              onClick={() => handleTabChange('issues')}
-            >
-              Issues
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'pullRequests' ? 'is-active' : ''}
-              onClick={() => handleTabChange('pullRequests')}
-            >
-              PRs
-            </button>
-          </div>
-
-          <div className="top-utility-actions" aria-label="Secondary actions">
-            <button
-              type="button"
-              className={`jobs-button ${runningJobsCount > 0 ? 'has-running-jobs' : ''}`.trim()}
-              onClick={() => setIsJobsOpen(true)}
-            >
-              <Activity size={14} />
-              <span className="jobs-count-badge">{runningJobsCount}</span>
-            </button>
-
-            {hasSyncedGithubFeed ? (
+        {!isDesktopLayout ? (
+          <header className="top-header">
+            <div className="top-toggle" aria-label="Select triage mode">
               <button
                 type="button"
-                className="jobs-button settings-button"
-                onClick={() => setIsSettingsOpen(true)}
-                aria-label="Settings"
+                className={activeTab === 'code' ? 'is-active' : ''}
+                onClick={() => handleTabChange('code')}
               >
-                <Settings size={14} />
+                Code
               </button>
-            ) : null}
-          </div>
-        </header>
+              <button
+                type="button"
+                className={activeTab === 'issues' ? 'is-active' : ''}
+                onClick={() => handleTabChange('issues')}
+              >
+                {desktopIssueCountLabel}
+              </button>
+              <button
+                type="button"
+                className={activeTab === 'pullRequests' ? 'is-active' : ''}
+                onClick={() => handleTabChange('pullRequests')}
+              >
+                {desktopPullRequestCountLabel}
+              </button>
+            </div>
 
-        {!hasSyncedGithubFeed ? (
-          <section className="startup-shell deck-shell">
+            <div className="top-utility-actions" aria-label="Secondary actions">
+              <button
+                type="button"
+                className={`jobs-button ${runningJobsCount > 0 ? 'has-running-jobs' : ''}`.trim()}
+                onClick={() => setIsJobsOpen(true)}
+              >
+                <Activity size={14} />
+                <span className="jobs-count-badge">{runningJobsCount}</span>
+              </button>
+
+              {hasSyncedGithubFeed ? (
+                <button
+                  type="button"
+                  className="jobs-button settings-button"
+                  onClick={() => setIsSettingsOpen(true)}
+                  aria-label="Settings"
+                >
+                  <Settings size={14} />
+                </button>
+              ) : null}
+            </div>
+          </header>
+        ) : null}
+
+        <div
+          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopSettingsPanel ? 'desktop-settings-open' : ''}`.trim()}
+        >
+          {showDesktopLeftNav ? (
+            <aside className="desktop-left-nav" aria-label="Desktop navigation">
+              <div className="desktop-left-nav-header">
+                <span className="settings-app-name">LYSIUM</span>
+              </div>
+              <nav className="desktop-left-nav-list" aria-label="Primary navigation">
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${!showDesktopMainActivity && activeTab === 'code' ? 'is-active' : ''}`.trim()}
+                  onClick={() => handleDesktopNavTabSelect('code')}
+                >
+                  Code
+                </button>
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${!showDesktopMainActivity && activeTab === 'issues' ? 'is-active' : ''}`.trim()}
+                  onClick={() => handleDesktopNavTabSelect('issues')}
+                >
+                  {desktopIssueCountLabel}
+                </button>
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${!showDesktopMainActivity && activeTab === 'pullRequests' ? 'is-active' : ''}`.trim()}
+                  onClick={() => handleDesktopNavTabSelect('pullRequests')}
+                >
+                  {desktopPullRequestCountLabel}
+                </button>
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${showDesktopMainActivity ? 'is-active' : ''}`.trim()}
+                  onClick={() => {
+                    setIsDesktopActivityOpen(true)
+                    setIsSettingsOpen(false)
+                  }}
+                >
+                  Activity
+                  <span className="jobs-count-badge">{runningJobsCount}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${isSettingsOpen ? 'is-active' : ''}`.trim()}
+                  onClick={() => setIsSettingsOpen((previous) => !previous)}
+                  aria-pressed={isSettingsOpen}
+                >
+                  Settings
+                </button>
+              </nav>
+              {canTriggerDesktopSwipe ? (
+                <div className="desktop-nav-swipe-actions">
+                  <button
+                    type="button"
+                    className={`fab-button desktop-swipe-button ${desktopLeftSwipeAction?.tone === 'danger' ? 'danger' : 'secondary'}`.trim()}
+                    onClick={() => commitSwipe('left')}
+                  >
+                    {desktopLeftSwipeAction?.icon}
+                    <span>{desktopLeftSwipeAction?.label ?? 'Close'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`fab-button desktop-swipe-button ${desktopRightSwipeAction?.tone === 'accent' ? 'assess-button pr-assess-action' : 'primary'}`.trim()}
+                    onClick={() => commitSwipe('right')}
+                  >
+                    {desktopRightSwipeAction?.icon}
+                    <span>{desktopRightSwipeAction?.label ?? 'Apply'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="fab-button secondary desktop-swipe-button"
+                    onClick={() => commitSwipe('down')}
+                  >
+                    {desktopDownSwipeAction?.icon}
+                    <span>{desktopDownSwipeAction?.label ?? 'Skip'}</span>
+                  </button>
+                  {activeTab === 'issues' ? (
+                    isActiveIssueAssessed && activeIssueAssessmentSessionUrl ? (
+                      <a
+                        className="fab-button assess-button assessed-session-link pr-assess-action desktop-swipe-button"
+                        href={activeIssueAssessmentSessionUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                      >
+                        <DevinLogo size={16} /> <span>Assessment</span>
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        className="fab-button assess-button pr-assess-action desktop-swipe-button"
+                        onClick={() => void handleAssessNecessity()}
+                        disabled={isAssessingIssue || isActiveIssueAssessed}
+                      >
+                        {isAssessingIssue ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={16} />}
+                        <span>{isActiveIssueAssessed ? 'Already Assessed' : 'Assess'}</span>
+                      </button>
+                    )
+                  ) : null}
+                  {activeTab === 'pullRequests' && !isActivePullRequestInMergeConflict && !isActivePullRequestConflictResolved ? (
+                    <>
+                      {activePullRequestReviewLink ? (
+                        <a
+                          className="fab-button assess-button pr-assess-action reviewed-pr-link desktop-swipe-button"
+                          href={activePullRequestReviewLink}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          <DevinLogo size={16} /> <span>Review</span>
+                        </a>
+                      ) : (
+                        <button type="button" className="fab-button assess-button pr-assess-action desktop-swipe-button" disabled>
+                          <DevinLogo size={16} /> <span>Review</span>
+                        </button>
+                      )}
+                      {isActivePrAssessed && activePullRequestAssessmentSessionUrl ? (
+                        <a
+                          className="fab-button assess-button assessed-session-link pr-assess-action desktop-swipe-button"
+                          href={activePullRequestAssessmentSessionUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          <DevinLogo size={16} /> <span>Assessment</span>
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="fab-button assess-button pr-assess-action desktop-swipe-button"
+                          onClick={() => void handleAssessPullRequestMergeDecision()}
+                          disabled={isAssessingPullRequest || isActivePrAssessed}
+                        >
+                          {isAssessingPullRequest ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={16} />}
+                          <span>{isActivePrAssessed ? 'Already Assessed' : 'Assess'}</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="fab-button secondary desktop-swipe-button"
+                        onClick={handleOpenCommentModal}
+                      >
+                        <MessageSquarePlus size={16} />
+                        <span>Comment</span>
+                      </button>
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="fab-button secondary desktop-swipe-button desktop-nav-refresh"
+                    onClick={() => void handleSyncGithubFeed()}
+                    disabled={isSyncingGithubFeed}
+                  >
+                    {isSyncingGithubFeed
+                      ? <span className="spinner" aria-hidden="true" />
+                      : <RefreshCw size={16} />}
+                    <span>{isSyncingGithubFeed ? 'Refreshing...' : 'Refresh Feed'}</span>
+                  </button>
+                </div>
+              ) : null}
+              <a
+                href="https://github.com/dabit3/elysium"
+                target="_blank"
+                rel="noreferrer noopener"
+                className="desktop-nav-github-link"
+                aria-label="View Lysium on GitHub"
+              >
+                <Github size={15} />
+              </a>
+            </aside>
+          ) : null}
+
+          <div className="app-main-column">
+            {showDesktopMainActivity ? (
+              renderActivityPanel('desktop-main-activity')
+            ) : (
+              <>
+                {!hasSyncedGithubFeed ? (
+              <section className="startup-shell deck-shell">
             <div className="startup-frame deck-frame">
               {showStartupLoadingState
                 ? renderStartupLoadingState()
@@ -4471,11 +4988,11 @@ function App() {
                       animate={{ x, y, rotate, scale, opacity }}
                       transition={
                         isTopCard && isAnimatingOut
-                          ? prefersReducedMotion
+                          ? prefersReducedMotion || isDesktopButtonSwipe
                             ? {
                                 type: 'tween',
                                 duration: swipeExitDurationMs / 1000,
-                                ease: 'easeOut',
+                                ease: [0.4, 0, 0.2, 1],
                               }
                             : {
                                 type: 'spring',
@@ -4649,7 +5166,7 @@ function App() {
         )
       ) : null}
 
-        {hasSyncedGithubFeed && activeTab !== 'code' ? (
+        {hasSyncedGithubFeed && activeTab !== 'code' && !isDesktopLayout ? (
           <section className="fab-section" aria-label="Triage actions">
             {activeTab === 'issues' ? (
               <div className="fab-row issue-actions">
@@ -4778,7 +5295,18 @@ function App() {
               </div>
             )}
           </section>
-        ) : null}
+            ) : null}
+              </>
+            )}
+          </div>
+
+          {showDesktopSettingsPanel ? (
+            <aside className="desktop-side-rail settings-open" aria-label="Desktop settings">
+              {renderThemeToggleSection('desktop-theme-toggle')}
+              {renderAuthPanel('desktop-settings-panel')}
+            </aside>
+          ) : null}
+        </div>
       </main>
 
       <AnimatePresence>
@@ -4844,7 +5372,7 @@ function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {isSettingsOpen ? (
+        {!isDesktopLayout && isSettingsOpen ? (
           <motion.div
             key="settings-backdrop"
             className="drawer-backdrop"
@@ -4873,7 +5401,7 @@ function App() {
                 transition={getDrawerContentTransition(0.03)}
               >
                 <div className="settings-header">
-                  <span className="settings-app-name">ELYSIUM</span>
+                  <span className="settings-app-name">LYSIUM</span>
                   <h3>Settings</h3>
                 </div>
                 <button
@@ -4891,35 +5419,17 @@ function App() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={getDrawerContentTransition(0.07)}
               >
-                <div className="theme-toggle-section">
-                  <div className="auth-panel-header">
-                    <h3>Theme</h3>
-                  </div>
-                  <div className="theme-toggle-row">
-                    <button
-                      type="button"
-                      className={`theme-option${colorTheme === 'dark' ? ' is-active' : ''}`}
-                      onClick={() => setColorTheme('dark')}
-                    >
-                      Dark
-                    </button>
-                    <button
-                      type="button"
-                      className={`theme-option${colorTheme === 'light' ? ' is-active' : ''}`}
-                      onClick={() => setColorTheme('light')}
-                    >
-                      Light
-                    </button>
-                    <button
-                      type="button"
-                      className={`theme-option${colorTheme === 'aurora' ? ' is-active' : ''}`}
-                      onClick={() => setColorTheme('aurora')}
-                    >
-                      Aurora
-                    </button>
-                  </div>
-                </div>
+                {renderThemeToggleSection()}
                 {renderAuthPanel('settings-auth-panel')}
+                <a
+                  href="https://github.com/dabit3/elysium"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="settings-github-link"
+                >
+                  <Github size={14} />
+                  <span>View on GitHub</span>
+                </a>
               </motion.div>
             </motion.aside>
           </motion.div>
@@ -4927,7 +5437,7 @@ function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {isJobsOpen ? (
+        {!isDesktopLayout && isJobsOpen ? (
           <motion.div
             key="jobs-backdrop"
             className="drawer-backdrop"
@@ -4978,74 +5488,7 @@ function App() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={getDrawerContentTransition(0.11)}
                 >
-                  <div className="jobs-section-header">
-                    <h4>Sessions & Jobs</h4>
-                    <span>{jobs.length}</span>
-                  </div>
-
-                  {jobs.length === 0 ? (
-                    <p className="jobs-empty">No sessions or jobs yet.</p>
-                  ) : (
-                    <ul className="jobs-list">
-                      {jobs.map((job) => (
-                        <li key={job.id} className={`job-item status-${job.status}`}>
-                          <div className="job-row">
-                            <p className="job-label">{job.label}</p>
-                            <span className={`job-status ${job.status}`}>{job.status}</span>
-                          </div>
-
-                          <p className="job-target">{job.target}</p>
-                          <p className="job-message">{job.message}</p>
-
-                          <div className="job-meta-row">
-                            <span className="job-time">
-                              {formatRelativeTime(job.createdAt)}
-                            </span>
-
-                            <div className="job-meta-actions">
-                              {job.pullRequestUrl ? (
-                                <a
-                                  href={job.pullRequestUrl}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                  className="job-session-link job-pr-link"
-                                  onClick={() => setIsJobsOpen(false)}
-                                >
-                                  View PR
-                                </a>
-                              ) : null}
-
-                              {job.sessionUrl ? (
-                                <a
-                                  href={job.sessionUrl}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                  className="job-session-link"
-                                  onClick={() => setIsJobsOpen(false)}
-                                >
-                                  {job.label === 'Review & Autofix'
-                                    ? 'Open Devin Review'
-                                    : 'Open Session'}
-                                </a>
-                              ) : null}
-
-                              {job.status === 'failed' && job.retryable ? (
-                                <button
-                                  type="button"
-                                  className="fab-button secondary job-retry"
-                                  onClick={() => {
-                                    void handleRetryJob(job.id)
-                                  }}
-                                >
-                                  Retry
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {renderJobsSectionContent({ closeOnLinkClick: true })}
                 </motion.section>
 
                 <motion.section
@@ -5055,30 +5498,7 @@ function App() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={getDrawerContentTransition(0.15)}
                 >
-                  <div className="jobs-section-header">
-                    <h4>Recent Actions</h4>
-                    <span>{actionStream.length}</span>
-                  </div>
-
-                  {actionStream.length === 0 ? (
-                    <p className="jobs-empty">No actions yet.</p>
-                  ) : (
-                    <ul className="jobs-actions-list">
-                      {actionStream.slice(0, 18).map((action) => (
-                        <li key={action.id} className="action-item">
-                          <div>
-                            <p className="action-label">{action.label}</p>
-                            <span className="action-time">
-                              {formatRelativeTime(action.createdAt)}
-                            </span>
-                          </div>
-                          <span className={`action-outcome ${action.outcome}`}>
-                            {action.outcome}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {renderRecentActionsSectionContent()}
                 </motion.section>
               </motion.div>
             </motion.aside>

@@ -52,6 +52,12 @@
   background: rgba(240, 240, 240, 0.76);
 }
 
+[data-theme="light"] .jobs-button.is-active {
+  color: #222;
+  border-color: rgba(180, 180, 180, 0.92);
+  background: rgba(235, 235, 235, 0.86);
+}
+
 /* Light theme: jobs count badge */
 [data-theme="light"] .jobs-count-badge {
   border-color: rgba(200, 200, 200, 0.84);
@@ -711,6 +717,76 @@
   gap: var(--space-4);
 }
 
+.app-content-layout {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main-column {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.desktop-side-rail {
+  display: none;
+}
+
+.desktop-toolbar {
+  display: grid;
+  gap: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  padding: 0.62rem;
+}
+
+.desktop-toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.desktop-toolbar-stat {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 0.18rem 0.4rem;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.desktop-toolbar-sync {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+.desktop-swipe-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.fab-button.desktop-swipe-button {
+  min-height: 40px;
+  font-size: 0.76rem;
+}
+
+.desktop-toolbar-hint {
+  margin: 0;
+  font-size: 0.67rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
 .top-header {
   display: flex;
   align-items: center;
@@ -786,6 +862,12 @@
   color: #ececec;
   border-color: rgba(88, 88, 88, 0.86);
   background: rgba(20, 20, 20, 0.76);
+}
+
+.jobs-button.is-active {
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .settings-button {
@@ -1220,6 +1302,21 @@
   border-color: rgba(0, 134, 228, 0.4);
   background: rgba(0, 134, 228, 0.08);
   color: var(--text-primary);
+}
+
+.repo-list-item-devins-machine {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.repo-list-devin-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .code-filter-empty {
@@ -1737,6 +1834,39 @@
   padding: 0;
 }
 
+.settings-github-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-family: var(--font-sans);
+  opacity: 0.6;
+  transition: opacity 150ms ease, color 150ms ease;
+  text-decoration: none;
+}
+
+.settings-github-link:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+
+.desktop-settings-panel,
+.desktop-activity-panel {
+  min-height: 0;
+}
+
+.desktop-activity-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.desktop-activity-content {
+  min-height: 0;
+}
+
 .theme-toggle-section {
   display: grid;
   gap: 0.5rem;
@@ -1802,9 +1932,13 @@
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.28em;
-  color: var(--accent-primary);
+  color: var(--text-primary);
   opacity: 0.72;
   text-transform: uppercase;
+}
+
+[data-theme="light"] .settings-app-name {
+  color: var(--accent-primary);
 }
 
 .jobs-close {
@@ -2752,8 +2886,232 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+
   .issue-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 1120px) {
+  .app-shell {
+    max-width: min(1560px, 100%);
+    padding-inline: var(--space-6);
+    gap: var(--space-3);
+  }
+
+  .top-header {
+    align-items: flex-start;
+  }
+
+  .top-utility-actions {
+    align-items: center;
+  }
+
+  .top-utility-actions .settings-button {
+    min-height: 42px;
+    height: auto;
+    padding-inline: 0.74rem;
+  }
+
+  .top-toggle {
+    max-width: 520px;
+  }
+
+  .top-toggle button {
+    font-size: 0.84rem;
+    padding: 0.48rem 0.68rem;
+  }
+
+  .app-content-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .app-content-layout.desktop-nav-layout {
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .app-content-layout.desktop-nav-layout.desktop-settings-open {
+    grid-template-columns: 200px minmax(0, 1fr) minmax(320px, 400px);
+  }
+
+  .app-main-column {
+    gap: var(--space-3);
+  }
+
+  .desktop-toolbar {
+    padding: 0.7rem;
+  }
+
+  .pr-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pr-actions .fab-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .desktop-left-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .desktop-left-nav-header {
+    padding: var(--space-2) var(--space-1) var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: var(--space-1);
+  }
+
+  .desktop-left-nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .desktop-nav-swipe-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .desktop-nav-swipe-actions .fab-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .desktop-nav-refresh {
+    margin-top: var(--space-1);
+    opacity: 0.7;
+  }
+
+  .desktop-nav-refresh:hover {
+    opacity: 1;
+  }
+
+  .desktop-nav-github-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: auto;
+    padding-top: var(--space-3);
+    color: var(--text-muted);
+    opacity: 0.45;
+    transition: opacity 150ms ease, color 150ms ease;
+  }
+
+  .desktop-nav-github-link:hover {
+    opacity: 1;
+    color: var(--text-primary);
+  }
+
+  .desktop-nav-button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: 0.5rem var(--space-3);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 500;
+    font-family: var(--font-sans);
+    letter-spacing: 0.01em;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      color 120ms ease,
+      background-color 140ms ease;
+  }
+
+  .desktop-nav-button:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .desktop-nav-button.is-active {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.09);
+  }
+
+  [data-theme="light"] .desktop-nav-button:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  [data-theme="light"] .desktop-nav-button.is-active {
+    background: rgba(0, 0, 0, 0.08);
+  }
+
+  .desktop-main-activity {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .desktop-side-rail {
+    min-height: 0;
+    display: grid;
+    gap: var(--space-3);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .desktop-theme-toggle {
+    margin-bottom: 0;
+  }
+
+  .desktop-side-rail .auth-panel {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .desktop-settings-panel {
+    overflow-y: auto;
+    overflow-x: clip;
+  }
+
+  .desktop-side-rail .jobs-drawer-content {
+    min-height: 0;
+  }
+
+  .desktop-side-rail .jobs-drawer-section {
+    min-height: 0;
+  }
+
+  .code-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: var(--space-3);
+    row-gap: var(--space-3);
+  }
+
+  .code-panel-header,
+  .code-empty-state {
+    grid-column: 1 / -1;
+  }
+
+  .code-browser,
+  .repo-request-form {
+    min-height: 0;
+  }
+
+  .repo-request-form {
+    align-content: start;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .repo-request-input {
+    min-height: 220px;
   }
 }
 

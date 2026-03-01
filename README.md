@@ -1,4 +1,4 @@
-# Elysium
+# Lysium
 
 A mobile-first GitHub triage tool. Swipe through issues and pull requests, close or merge them directly, and delegate implementation work to [Devin](https://devin.ai). Built with React, TypeScript, and Vite.
 
@@ -6,7 +6,7 @@ A mobile-first GitHub triage tool. Swipe through issues and pull requests, close
 
 ## How credentials work
 
-Elysium does not store credentials in the browser. Users enter their Devin API key, org ID, and GitHub scope once in the app's Settings panel. The credentials are validated against the Devin API and then stored in a signed `HttpOnly` cookie — they never touch `localStorage` or the browser's JS environment after that. All Devin API calls are proxied through the server.
+Lysium does not store credentials in the browser. Users enter their Devin API key, org ID, and GitHub scope once in the app's Settings panel. The credentials are validated against the Devin API and then stored in a signed `HttpOnly` cookie — they never touch `localStorage` or the browser's JS environment after that. All Devin API calls are proxied through the server.
 
 ---
 
