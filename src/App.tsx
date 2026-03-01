@@ -1708,6 +1708,9 @@ function App() {
 
       setHasGithubOauthSession(true)
       setGithubOauthLogin(login)
+      if (login && githubSearchScope.trim().length === 0) {
+        setGithubSearchScope(`user:${login}`)
+      }
       return token
     } catch (error) {
       if (!options?.silent) {
@@ -1728,6 +1731,27 @@ function App() {
     window.location.assign(GITHUB_OAUTH_START_URL)
   }
 
+  const clearPersistedGithubSearchScope = async () => {
+    setGithubSearchScope('')
+
+    if (!hasDevinSession) {
+      return
+    }
+
+    try {
+      await fetch(DEVIN_SESSION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          orgId: devinOrgId.trim(),
+          createAsUserId: devinCreateAsUserId.trim(),
+          githubSearchScope: '',
+        }),
+      })
+    } catch {}
+  }
+
   const handleDisconnectGithubOauth = async () => {
     if (isDisconnectingGithubOauthSession) {
       return
@@ -1736,6 +1760,7 @@ function App() {
     if (!GITHUB_OAUTH_DISCONNECT_URL) {
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
+      await clearPersistedGithubSearchScope()
       return
     }
 
@@ -1756,6 +1781,7 @@ function App() {
 
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
+      await clearPersistedGithubSearchScope()
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to disconnect GitHub OAuth.'
@@ -3536,7 +3562,11 @@ function App() {
     }
 
     try {
-      window.localStorage.setItem(GITHUB_SCOPE_STORAGE_KEY, githubSearchScope)
+      if (githubSearchScope.trim().length === 0) {
+        window.localStorage.removeItem(GITHUB_SCOPE_STORAGE_KEY)
+      } else {
+        window.localStorage.setItem(GITHUB_SCOPE_STORAGE_KEY, githubSearchScope)
+      }
     } catch {}
   }, [githubSearchScope])
 
@@ -4172,18 +4202,20 @@ function App() {
           </span>
         </div>
 
-        <label className="auth-field">
-          <span>GitHub scope</span>
-          <input
-            type="text"
-            value={githubSearchScope}
-            placeholder="acme (defaults to org:acme) or user:acme"
-            autoComplete="off"
-            onChange={(event) => {
-              setGithubSearchScope(event.target.value)
-            }}
-          />
-        </label>
+        {hasGithubOauthSession ? (
+          <label className="auth-field">
+            <span>GitHub scope</span>
+            <input
+              type="text"
+              value={githubSearchScope}
+              placeholder="acme (defaults to org:acme) or user:acme"
+              autoComplete="off"
+              onChange={(event) => {
+                setGithubSearchScope(event.target.value)
+              }}
+            />
+          </label>
+        ) : null}
 
         {hasGithubOauthSession ? (
           <button
