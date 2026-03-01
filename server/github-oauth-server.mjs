@@ -67,7 +67,7 @@ const PORT = readNumberEnv('GITHUB_OAUTH_SERVER_PORT', 8787)
 const CLIENT_ID = readEnv('GITHUB_OAUTH_CLIENT_ID')
 const CLIENT_SECRET = readEnv('GITHUB_OAUTH_CLIENT_SECRET')
 const REDIRECT_URI = readEnv('GITHUB_OAUTH_REDIRECT_URI')
-const SCOPES = readEnv('GITHUB_OAUTH_SCOPES', 'repo')
+const OAUTH_SCOPE = 'repo'
 const SUCCESS_REDIRECT_URL = readEnv('GITHUB_OAUTH_SUCCESS_REDIRECT_URL', 'http://localhost:5173/')
 const ALLOWED_ORIGIN = readEnv('GITHUB_OAUTH_ALLOWED_ORIGIN', 'http://localhost:5173')
 const COOKIE_DOMAIN = readEnv('GITHUB_OAUTH_COOKIE_DOMAIN')
@@ -339,7 +339,7 @@ const server = createServer(async (request, response) => {
     const authorizeUrl = new URL('https://github.com/login/oauth/authorize')
     authorizeUrl.searchParams.set('client_id', CLIENT_ID)
     authorizeUrl.searchParams.set('redirect_uri', REDIRECT_URI)
-    authorizeUrl.searchParams.set('scope', SCOPES)
+    authorizeUrl.searchParams.set('scope', OAUTH_SCOPE)
     authorizeUrl.searchParams.set('state', state)
 
     appendSetCookie(

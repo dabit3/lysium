@@ -4129,7 +4129,7 @@ function App() {
         <input
           type="password"
           value={devinApiKey}
-          placeholder={hasApiKey ? '••••••••••••' : 'cog_...'}
+          placeholder={hasApiKey ? 'Stored server-side (enter to replace)' : 'cog_...'}
           autoComplete="off"
           onChange={(event) => {
             setDevinApiKey(event.target.value)
@@ -4137,6 +4137,9 @@ function App() {
           }}
         />
       </label>
+      {hasDevinSession && devinApiKey.trim().length === 0 ? (
+        <p className="auth-note">Service key is saved securely. Enter a new key only to replace it.</p>
+      ) : null}
 
       <div className="auth-inline-grid">
         <label className="auth-field">
@@ -4246,7 +4249,7 @@ function App() {
           >
             {isDisconnectingGithubOauthSession ? <span className="spinner" aria-hidden="true" /> : null}
             <span>
-              {isDisconnectingGithubOauthSession ? 'Disconnecting...' : 'Disconnect GitHub OAuth'}
+              {isDisconnectingGithubOauthSession ? 'Signing out...' : 'Sign out'}
             </span>
           </button>
         ) : null}

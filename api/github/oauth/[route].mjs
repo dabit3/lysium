@@ -23,7 +23,6 @@ const cfg = () => ({
   clientId: readEnv('GITHUB_OAUTH_CLIENT_ID'),
   clientSecret: readEnv('GITHUB_OAUTH_CLIENT_SECRET'),
   redirectUri: readEnv('GITHUB_OAUTH_REDIRECT_URI'),
-  scopes: readEnv('GITHUB_OAUTH_SCOPES', 'repo'),
   successRedirectUrl: readEnv('GITHUB_OAUTH_SUCCESS_REDIRECT_URL'),
   allowedOrigin: readEnv('GITHUB_OAUTH_ALLOWED_ORIGIN'),
 })
@@ -69,7 +68,7 @@ export default async function handler(req, res) {
   const url = new URL(req.url, `https://${req.headers.host}`)
   const route = url.pathname.replace(/^\/api\/github\/oauth\/?/, '') || ''
   const method = req.method
-  const { allowedOrigin, scopes, redirectUri } = cfg()
+  const { allowedOrigin, redirectUri } = cfg()
 
   const origin = req.headers.origin
   if (origin && allowedOrigin && origin === allowedOrigin) {
@@ -89,7 +88,7 @@ export default async function handler(req, res) {
     const authUrl = new URL('https://github.com/login/oauth/authorize')
     authUrl.searchParams.set('client_id', clientId)
     authUrl.searchParams.set('redirect_uri', redirectUri)
-    authUrl.searchParams.set('scope', scopes)
+    authUrl.searchParams.set('scope', 'repo')
     authUrl.searchParams.set('state', state)
     res.setHeader('Set-Cookie', buildCookie(STATE_COOKIE_NAME, state, STATE_TTL_SECONDS))
     res.redirect(302, authUrl.toString())

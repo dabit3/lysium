@@ -73,7 +73,6 @@ Go to your project → **Settings → Environment Variables** and add:
 | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App client ID |
 | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App client secret |
 | `GITHUB_OAUTH_REDIRECT_URI` | `https://your-app.vercel.app/api/github/oauth/callback` |
-| `GITHUB_OAUTH_SCOPES` | `repo` |
 | `GITHUB_OAUTH_SUCCESS_REDIRECT_URL` | `https://your-app.vercel.app/` |
 | `GITHUB_OAUTH_ALLOWED_ORIGIN` | `https://your-app.vercel.app` |
 | `GITHUB_OAUTH_COOKIE_SECURE` | `true` |

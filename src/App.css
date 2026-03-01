@@ -1062,6 +1062,10 @@
   font-family: var(--font-mono);
 }
 
+.auth-field input::placeholder {
+  font-size: 0.8rem;
+}
+
 .auth-field input:focus-visible {
   outline: none;
   border-color: var(--accent-primary);
