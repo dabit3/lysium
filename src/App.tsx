@@ -197,14 +197,6 @@ const extractGithubOauthToken = (payload: unknown) => {
   return tokenCandidate.trim()
 }
 
-const extractGithubOauthUserId = (payload: unknown): number | null => {
-  if (!payload || typeof payload !== 'object') return null
-  const candidate = payload as Record<string, unknown>
-  if (typeof candidate.userId === 'number') return candidate.userId
-  if (typeof candidate.user_id === 'number') return candidate.user_id
-  return null
-}
-
 const extractGithubOauthLogin = (payload: unknown) => {
   if (!payload || typeof payload !== 'object') {
     return null
@@ -1312,8 +1304,6 @@ function App() {
   const [hasDevinSession, setHasDevinSession] = useState(false)
   const [hasGithubOauthSession, setHasGithubOauthSession] = useState(false)
   const [githubOauthLogin, setGithubOauthLogin] = useState<string | null>(null)
-  const [githubOauthUserId, setGithubOauthUserId] = useState<number | null>(null)
-  const [isRefreshingGithubOauthSession, setIsRefreshingGithubOauthSession] = useState(false)
   const [isDisconnectingGithubOauthSession, setIsDisconnectingGithubOauthSession] =
     useState(false)
   const [isClearingSession, setIsClearingSession] = useState(false)
@@ -1684,11 +1674,8 @@ function App() {
     if (!HAS_GITHUB_OAUTH_CONFIG) {
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
-      setGithubOauthUserId(null)
       return ''
     }
-
-    setIsRefreshingGithubOauthSession(true)
 
     try {
       const response = await fetch(GITHUB_OAUTH_TOKEN_URL, {
@@ -1701,7 +1688,6 @@ function App() {
       if (response.status === 204 || response.status === 401 || response.status === 404) {
         setHasGithubOauthSession(false)
         setGithubOauthLogin(null)
-        setGithubOauthUserId(null)
         return ''
       }
 
@@ -1713,18 +1699,15 @@ function App() {
       const payload = raw.length > 0 ? (JSON.parse(raw) as unknown) : null
       const token = extractGithubOauthToken(payload)
       const login = extractGithubOauthLogin(payload)
-      const userId = extractGithubOauthUserId(payload)
 
       if (!token) {
         setHasGithubOauthSession(false)
         setGithubOauthLogin(null)
-        setGithubOauthUserId(null)
         return ''
       }
 
       setHasGithubOauthSession(true)
       setGithubOauthLogin(login)
-      setGithubOauthUserId(userId)
       return token
     } catch (error) {
       if (!options?.silent) {
@@ -1733,8 +1716,6 @@ function App() {
         showToast(`GitHub OAuth session check failed: ${message}`)
       }
       return ''
-    } finally {
-      setIsRefreshingGithubOauthSession(false)
     }
   }
 
@@ -1755,7 +1736,6 @@ function App() {
     if (!GITHUB_OAUTH_DISCONNECT_URL) {
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
-      setGithubOauthUserId(null)
       return
     }
 
@@ -1776,7 +1756,6 @@ function App() {
 
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
-      setGithubOauthUserId(null)
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to disconnect GitHub OAuth.'
@@ -3499,7 +3478,6 @@ function App() {
       setHasVerifiedDevinConnection(false)
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
-      setGithubOauthUserId(null)
       showToast('Session cleared.')
     } catch (error) {
       const message =
@@ -4268,7 +4246,7 @@ function App() {
       <div className="auth-inline-grid auth-reset-row">
         <button
           type="button"
-          className="fab-button danger auth-clear-button"
+          className="fab-button secondary auth-clear-button"
           onClick={() => {
             void handleClearSession()
           }}
