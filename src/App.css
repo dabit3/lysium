@@ -831,6 +831,7 @@
   padding: 0.68rem;
   display: grid;
   gap: 0.56rem;
+  align-content: start;
 }
 
 .startup-shell {
@@ -1072,10 +1073,10 @@
   box-shadow: inset 0 0 0 1px var(--accent-primary);
 }
 
-.auth-verify-button,
-.auth-sync-button,
-.auth-clear-button {
-  min-height: 32px;
+.fab-button.auth-verify-button,
+.fab-button.auth-sync-button,
+.fab-button.auth-clear-button {
+  min-height: 46px;
   font-size: 0.72rem;
   padding: 0 0.65rem;
 }

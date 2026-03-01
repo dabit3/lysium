@@ -4185,17 +4185,19 @@ function App() {
           />
         </label>
 
-        <button
-          type="button"
-          className="fab-button primary auth-sync-button"
-          onClick={() => {
-            void handleSyncGithubFeed()
-          }}
-          disabled={isSyncingGithubFeed || isVerifyingDevinConnection || !canSyncGithubFeed}
-        >
-          {isSyncingGithubFeed ? <span className="spinner" aria-hidden="true" /> : null}
-          <span>{isSyncingGithubFeed ? 'Syncing GitHub Feed...' : 'Sync GitHub Feed'}</span>
-        </button>
+        {hasGithubOauthSession ? (
+          <button
+            type="button"
+            className="fab-button primary auth-sync-button"
+            onClick={() => {
+              void handleSyncGithubFeed()
+            }}
+            disabled={isSyncingGithubFeed || isVerifyingDevinConnection || !canSyncGithubFeed}
+          >
+            {isSyncingGithubFeed ? <span className="spinner" aria-hidden="true" /> : null}
+            <span>{isSyncingGithubFeed ? 'Syncing GitHub Feed...' : 'Sync GitHub Feed'}</span>
+          </button>
+        ) : null}
 
         <button
           type="button"
