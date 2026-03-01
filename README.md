@@ -38,7 +38,6 @@ Fill in `.env.local`:
 | `GITHUB_OAUTH_REDIRECT_URI` | `http://localhost:8787/api/github/oauth/callback` |
 | `GITHUB_OAUTH_SUCCESS_REDIRECT_URL` | `http://localhost:5173/` |
 | `GITHUB_OAUTH_ALLOWED_ORIGIN` | `http://localhost:5173` |
-| `GITHUB_OAUTH_COOKIE_SECRET` | Any random string (generate: `openssl rand -hex 32`) |
 
 ### 3. Create a GitHub OAuth App
 
