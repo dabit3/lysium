@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "devCommand": "npm run dev -- --port $PORT",
+  "rewrites": [
+    { "source": "/api/github/oauth/:route*", "destination": "/api/github/oauth/[route]" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

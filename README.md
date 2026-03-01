@@ -8,75 +8,89 @@ A mobile-first GitHub triage tool. Swipe through issues and pull requests, close
 
 - Node.js 18+
 - A [Devin](https://app.devin.ai) service user API key (`cog_...`)
-- A GitHub OAuth App (for GitHub feed sync)
+- A GitHub OAuth App
 
 ---
 
-## Setup
+## Running locally
+
+### 1. Install dependencies
 
 ```bash
-cp .env.example .env
+npm install
 ```
 
-Fill in `.env` with your values.
+### 2. Create your env file
 
-### Environment variables
+```bash
+cp .env.example .env.local
+```
 
-**Frontend (required)**
+Fill in `.env.local`:
 
 | Variable | Description |
 |---|---|
 | `VITE_DEVIN_API_KEY` | Devin service user API key |
 | `VITE_DEVIN_ORG_ID` | Devin organization ID |
 | `VITE_GITHUB_SCOPE` | GitHub search scope, e.g. `org:your-org` |
-| `VITE_GITHUB_OAUTH_START_URL` | OAuth start endpoint, e.g. `/api/github/oauth/start` |
-| `VITE_GITHUB_OAUTH_TOKEN_URL` | OAuth token endpoint, e.g. `/api/github/oauth/token` |
-| `VITE_GITHUB_OAUTH_DISCONNECT_URL` | OAuth disconnect endpoint (optional) |
-
-**Backend OAuth server (required for GitHub sync)**
-
-| Variable | Description |
-|---|---|
 | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App client ID |
 | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App client secret |
-| `GITHUB_OAUTH_REDIRECT_URI` | Callback URL registered in your GitHub OAuth App |
-| `GITHUB_OAUTH_SERVER_PORT` | Port for the local OAuth server (default: `8787`) |
-| `GITHUB_OAUTH_SUCCESS_REDIRECT_URL` | Where to redirect after login (default: `http://localhost:5173/`) |
-| `GITHUB_OAUTH_ALLOWED_ORIGIN` | CORS origin for the frontend (default: `http://localhost:5173`) |
-| `GITHUB_OAUTH_SCOPES` | GitHub OAuth scopes (default: `repo`) |
-| `GITHUB_OAUTH_COOKIE_SECURE` | Set to `true` in production (default: `false`) |
+| `GITHUB_OAUTH_REDIRECT_URI` | `http://localhost:8787/api/github/oauth/callback` |
+| `GITHUB_OAUTH_SUCCESS_REDIRECT_URL` | `http://localhost:5173/` |
+| `GITHUB_OAUTH_ALLOWED_ORIGIN` | `http://localhost:5173` |
+| `GITHUB_OAUTH_COOKIE_SECRET` | Any random string (generate: `openssl rand -hex 32`) |
 
-### GitHub OAuth App
+### 3. Create a GitHub OAuth App
 
-1. Go to GitHub Settings > Developer settings > OAuth Apps > New OAuth App
-2. Set the callback URL to `http://localhost:8787/api/github/oauth/callback` for local development
-3. Copy the client ID and secret into `.env`
+1. Go to **GitHub Settings → Developer settings → OAuth Apps → New OAuth App**
+2. Set the callback URL to `http://localhost:8787/api/github/oauth/callback`
+3. Copy the client ID and secret into `.env.local`
+
+### 4. Start the app
+
+```bash
+npm run dev:all
+```
+
+This starts both the OAuth server (port 8787) and the Vite frontend (port 5173) in one command. The app runs at `http://localhost:5173`.
 
 ---
 
-## Running locally
+## Deploying to Vercel
 
-Start the OAuth backend and the frontend in separate terminals:
+### 1. Push to GitHub and import the repo in Vercel
 
-```bash
-npm run oauth:server
+Go to [vercel.com](https://vercel.com), create a new project, and import your repository. Vercel will auto-detect the Vite build settings.
+
+### 2. Set environment variables in the Vercel dashboard
+
+Go to your project → **Settings → Environment Variables** and add:
+
+| Variable | Value |
+|---|---|
+| `VITE_DEVIN_API_KEY` | Your Devin service user API key |
+| `VITE_DEVIN_ORG_ID` | Your Devin organization ID |
+| `VITE_GITHUB_SCOPE` | e.g. `org:your-org` |
+| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App client secret |
+| `GITHUB_OAUTH_REDIRECT_URI` | `https://your-app.vercel.app/api/github/oauth/callback` |
+| `GITHUB_OAUTH_SCOPES` | `repo` |
+| `GITHUB_OAUTH_SUCCESS_REDIRECT_URL` | `https://your-app.vercel.app/` |
+| `GITHUB_OAUTH_ALLOWED_ORIGIN` | `https://your-app.vercel.app` |
+| `GITHUB_OAUTH_COOKIE_SECURE` | `true` |
+| `GITHUB_OAUTH_COOKIE_SECRET` | Random 32+ char string (`openssl rand -hex 32`) |
+
+### 3. Update your GitHub OAuth App
+
+In your GitHub OAuth App settings, set the callback URL to:
+
+```
+https://your-app.vercel.app/api/github/oauth/callback
 ```
 
-```bash
-npm run dev
-```
+### 4. Deploy
 
-The app runs at `http://localhost:5173`.
-
----
-
-## Build
-
-```bash
-npm run build
-```
-
-Output goes to `dist/`.
+Vercel deploys automatically on every push to your main branch. The OAuth API is served as a serverless function — no separate server needed.
 
 ---
 

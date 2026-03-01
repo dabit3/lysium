@@ -231,13 +231,10 @@ const readEnvString = (value: unknown) =>
 const DEFAULT_DEVIN_API_KEY = readEnvString(import.meta.env.VITE_DEVIN_API_KEY)
 const DEFAULT_DEVIN_ORG_ID = readEnvString(import.meta.env.VITE_DEVIN_ORG_ID)
 const DEFAULT_GITHUB_SCOPE = readEnvString(import.meta.env.VITE_GITHUB_SCOPE)
-const GITHUB_OAUTH_START_URL = readEnvString(import.meta.env.VITE_GITHUB_OAUTH_START_URL)
-const GITHUB_OAUTH_TOKEN_URL = readEnvString(import.meta.env.VITE_GITHUB_OAUTH_TOKEN_URL)
-const GITHUB_OAUTH_DISCONNECT_URL = readEnvString(
-  import.meta.env.VITE_GITHUB_OAUTH_DISCONNECT_URL,
-)
-const HAS_GITHUB_OAUTH_CONFIG =
-  GITHUB_OAUTH_START_URL.length > 0 && GITHUB_OAUTH_TOKEN_URL.length > 0
+const GITHUB_OAUTH_START_URL = '/api/github/oauth/start'
+const GITHUB_OAUTH_TOKEN_URL = '/api/github/oauth/token'
+const GITHUB_OAUTH_DISCONNECT_URL = '/api/github/oauth/disconnect'
+const HAS_GITHUB_OAUTH_CONFIG = true
 const HAS_BOOTSTRAP_CREDENTIALS =
   DEFAULT_DEVIN_API_KEY.length > 0 &&
   DEFAULT_DEVIN_ORG_ID.length > 0 &&
@@ -4208,7 +4205,7 @@ function App() {
 
       <p className="auth-note">
         {HAS_GITHUB_OAUTH_CONFIG
-          ? 'GitHub feed sync uses GitHub OAuth from your backend session. Devin API key is still used for action automation.'
+          ? 'GitHub feed sync uses GitHub OAuth. Devin API key is used for action automation.'
           : 'GitHub feed sync requires GitHub OAuth backend URLs in your environment.'}
       </p>
     </section>
