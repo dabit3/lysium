@@ -1506,7 +1506,7 @@ function App() {
   const hasDevinOrgId = devinOrgId.trim().length > 0
   const hasGithubScope = githubSearchScope.trim().length > 0
   const canSyncGithubFeed =
-    hasApiKey &&
+    hasDevinSession &&
     hasDevinOrgId &&
     HAS_GITHUB_OAUTH_CONFIG &&
     hasGithubOauthSession &&
@@ -1693,6 +1693,9 @@ function App() {
     if (!hasApiKey) {
       return 'Add a Devin service user API key in settings to run Devin actions.'
     }
+    if (!hasDevinOrgId) {
+      return 'Add a Devin organization ID in settings to run Devin actions.'
+    }
     return null
   }
 
@@ -1828,6 +1831,20 @@ function App() {
     } catch {}
   }
 
+  const resetSyncedGithubFeedState = () => {
+    setHasSyncedGithubFeed(false)
+    setIssues([])
+    setPullRequests([])
+    setPullRequestCodeLookup({})
+    setMergeConflictLookup({})
+    setMergeConflictCheckLookup({})
+    setMergeConflictResolutionLookup({})
+    mergeConflictPollingLookupRef.current = {}
+    setLastGithubSyncSummary(null)
+    setIsDesktopActivityOpen(false)
+    hasAttemptedStartupSyncRef.current = false
+  }
+
   const handleDisconnectGithubOauth = async () => {
     if (isDisconnectingGithubOauthSession) {
       return
@@ -1836,6 +1853,7 @@ function App() {
     if (!GITHUB_OAUTH_DISCONNECT_URL) {
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
+      resetSyncedGithubFeedState()
       await clearPersistedGithubSearchScope()
       return
     }
@@ -1857,6 +1875,7 @@ function App() {
 
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
+      resetSyncedGithubFeedState()
       await clearPersistedGithubSearchScope()
     } catch (error) {
       const message =
@@ -2371,6 +2390,12 @@ function App() {
       return
     }
 
+    const orgIdToSave = devinOrgId.trim()
+    if (!orgIdToSave) {
+      showToast('Add a Devin organization ID to verify.')
+      return
+    }
+
     setIsVerifyingDevinConnection(true)
     const actionId = addAction('Verify Devin API key', 'pending')
     const jobId = addJob('Verify auth', 'Devin API /organizations/sessions')
@@ -2382,7 +2407,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(keyToSave ? { apiKey: keyToSave } : {}),
-          orgId: devinOrgId.trim(),
+          orgId: orgIdToSave,
           createAsUserId: devinCreateAsUserId.trim(),
           githubSearchScope: githubSearchScope.trim(),
         }),
@@ -3600,6 +3625,7 @@ function App() {
       setHasVerifiedDevinConnection(false)
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
+      resetSyncedGithubFeedState()
       showToast('Session cleared.')
     } catch (error) {
       const message =
@@ -3711,6 +3737,12 @@ function App() {
   }, [jobs])
 
   useEffect(() => {
+    if (!hasDevinSession || !hasDevinOrgId || !hasGithubOauthSession || !hasGithubScope) {
+      hasAttemptedStartupSyncRef.current = false
+    }
+  }, [hasDevinSession, hasDevinOrgId, hasGithubOauthSession, hasGithubScope])
+
+  useEffect(() => {
     void refreshGithubOauthSessionToken({ silent: true })
 
     fetch(DEVIN_SESSION_URL)
@@ -3736,15 +3768,23 @@ function App() {
     if (
       hasAttemptedStartupSyncRef.current ||
       isLoadingDevinSession ||
-      !hasApiKey ||
-      !hasGithubOauthSession
+      !hasDevinSession ||
+      !hasDevinOrgId ||
+      !hasGithubOauthSession ||
+      !hasGithubScope
     ) {
       return
     }
 
     hasAttemptedStartupSyncRef.current = true
     void syncGithubFeedRef.current?.({ autoTriggered: true })
-  }, [hasGithubOauthSession, isLoadingDevinSession, hasApiKey])
+  }, [
+    hasDevinSession,
+    hasDevinOrgId,
+    hasGithubOauthSession,
+    hasGithubScope,
+    isLoadingDevinSession,
+  ])
 
   useEffect(() => {
     if (!isDesktopLayout || !hasSyncedGithubFeed || activeTab === 'code') {
@@ -4374,7 +4414,7 @@ function App() {
       ) : null}
 
       <div className="auth-inline-grid">
-        <label className="auth-field">
+        <label className="auth-field auth-field-compact">
           <span>Org ID</span>
           <input
             type="text"
@@ -4388,7 +4428,7 @@ function App() {
           />
         </label>
 
-        <label className="auth-field">
+        <label className="auth-field auth-field-compact">
           <span>Create as user id (optional)</span>
           <input
             type="text"
@@ -4402,17 +4442,29 @@ function App() {
         </label>
       </div>
 
-      <button
-        type="button"
-        className="fab-button secondary auth-verify-button"
-        onClick={() => {
-          void handleVerifyDevinConnection()
-        }}
-        disabled={isVerifyingDevinConnection}
-      >
-        {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : null}
-        <span>Verify Devin API key</span>
-      </button>
+      <div className={`auth-inline-grid ${hasVerifiedDevinConnection ? 'single-column' : ''}`.trim()}>
+        <button
+          type="button"
+          className="fab-button secondary auth-verify-button"
+          onClick={() => {
+            void handleVerifyDevinConnection()
+          }}
+          disabled={isVerifyingDevinConnection}
+        >
+          {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : null}
+          <span>Verify API Key</span>
+        </button>
+        {!hasVerifiedDevinConnection ? (
+          <a
+            href="https://app.devin.ai"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="fab-button assess-button pr-assess-action auth-verify-button"
+          >
+            Sign Up
+          </a>
+        ) : null}
+      </div>
 
       <div className="auth-inline-grid oauth-actions-grid">
         <div className="auth-panel-header">
@@ -4470,18 +4522,14 @@ function App() {
           </span>
         </button>
 
-        {GITHUB_OAUTH_DISCONNECT_URL ? (
+        {GITHUB_OAUTH_DISCONNECT_URL && hasGithubOauthSession ? (
           <button
             type="button"
             className="fab-button danger auth-verify-button"
             onClick={() => {
               void handleDisconnectGithubOauth()
             }}
-            disabled={
-              !HAS_GITHUB_OAUTH_CONFIG ||
-              !hasGithubOauthSession ||
-              isDisconnectingGithubOauthSession
-            }
+            disabled={isDisconnectingGithubOauthSession}
           >
             {isDisconnectingGithubOauthSession ? <span className="spinner" aria-hidden="true" /> : null}
             <span>
@@ -4674,7 +4722,7 @@ function App() {
       ) : null}
 
       <main className="app-shell">
-        {!isDesktopLayout ? (
+        {!isDesktopLayout && hasSyncedGithubFeed ? (
           <header className="top-header">
             <div className="top-toggle" aria-label="Select triage mode">
               <button
@@ -4899,16 +4947,38 @@ function App() {
             ) : (
               <>
                 {!hasSyncedGithubFeed ? (
-              <section className="startup-shell deck-shell">
-            <div className="startup-frame deck-frame">
-              {showStartupLoadingState
-                ? renderStartupLoadingState()
-                : shouldShowCredentialSetup
-                  ? renderAuthPanel('startup-auth-panel')
-                  : null}
-            </div>
-          </section>
-        ) : null}
+                  isDesktopLayout ? (
+                    <div className="startup-desktop-welcome">
+                      <div className="startup-desktop-logo">
+                        <span className="settings-app-name startup-desktop-logo-text">LYSIUM</span>
+                        <p className="startup-desktop-tagline">GitHub triage, powered by Devin</p>
+                      </div>
+                      <div className="startup-desktop-panel">
+                        {showStartupLoadingState
+                          ? renderStartupLoadingState()
+                          : shouldShowCredentialSetup
+                            ? renderAuthPanel('startup-auth-panel')
+                            : null}
+                      </div>
+                    </div>
+                  ) : (
+                    <section className="startup-shell deck-shell">
+                      <div className="startup-mobile-welcome">
+                        <div className="startup-desktop-logo">
+                          <span className="settings-app-name startup-mobile-logo-text">LYSIUM</span>
+                          <p className="startup-desktop-tagline">GitHub triage, powered by Devin</p>
+                        </div>
+                        <div className="startup-mobile-panel">
+                          {showStartupLoadingState
+                            ? renderStartupLoadingState()
+                            : shouldShowCredentialSetup
+                              ? renderAuthPanel('startup-auth-panel')
+                              : null}
+                        </div>
+                      </div>
+                    </section>
+                  )
+                ) : null}
       {hasSyncedGithubFeed ? (
         activeTab === 'code' ? (
           <section className="deck-shell" key="tab-code">

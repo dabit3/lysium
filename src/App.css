@@ -922,6 +922,46 @@
   display: flex;
 }
 
+.startup-mobile-welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 12vh;
+  gap: var(--space-6);
+  overflow-y: auto;
+}
+
+.settings-app-name.startup-mobile-logo-text {
+  font-size: 2rem;
+  letter-spacing: 0.36em;
+  opacity: 1;
+  text-align: center;
+  display: block;
+}
+
+.startup-mobile-panel {
+  width: 100%;
+}
+
+.startup-mobile-panel .startup-loading-panel,
+.startup-desktop-panel .startup-loading-panel {
+  min-height: 380px;
+}
+
+.startup-mobile-panel .startup-skeleton-frame,
+.startup-desktop-panel .startup-skeleton-frame {
+  min-height: 320px;
+}
+
+.startup-desktop-tagline {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
 .startup-frame {
   flex: 1 1 auto;
   min-height: 0;
@@ -1143,6 +1183,10 @@
   letter-spacing: 0.01em;
   padding: 0.45rem 0.56rem;
   font-family: var(--font-mono);
+}
+
+.auth-field.auth-field-compact input {
+  font-size: 0.72rem;
 }
 
 .auth-field input::placeholder {
@@ -2867,6 +2911,10 @@
   .comment-modal textarea {
     font-size: 16px;
   }
+
+  .auth-field.auth-field-compact input {
+    font-size: 15px;
+  }
 }
 
 @media (min-width: 480px) {
@@ -2876,6 +2924,10 @@
 
   .auth-inline-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .auth-inline-grid.single-column {
+    grid-template-columns: 1fr;
   }
 
   .oauth-actions-grid {
@@ -2943,6 +2995,38 @@
 
   .desktop-toolbar {
     padding: 0.7rem;
+  }
+
+  .startup-desktop-welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 10vh;
+    gap: var(--space-6);
+  }
+
+  .startup-desktop-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .startup-desktop-logo-text {
+    font-size: 1.4rem;
+    letter-spacing: 0.36em;
+    opacity: 1;
+  }
+
+
+
+  .startup-desktop-panel {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .startup-desktop-panel .startup-auth-panel {
+    overflow-y: visible;
   }
 
   .pr-actions {
