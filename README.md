@@ -4,10 +4,15 @@ A mobile-first GitHub triage tool. Swipe through issues and pull requests, close
 
 ---
 
+## How credentials work
+
+Elysium does not store credentials in the browser. Users enter their Devin API key, org ID, and GitHub scope once in the app's Settings panel. The credentials are validated against the Devin API and then stored in a signed `HttpOnly` cookie — they never touch `localStorage` or the browser's JS environment after that. All Devin API calls are proxied through the server.
+
+---
+
 ## Requirements
 
 - Node.js 18+
-- A [Devin](https://app.devin.ai) service user API key (`cog_...`)
 - A GitHub OAuth App
 
 ---
@@ -30,14 +35,12 @@ Fill in `.env.local`:
 
 | Variable | Description |
 |---|---|
-| `VITE_DEVIN_API_KEY` | Devin service user API key |
-| `VITE_DEVIN_ORG_ID` | Devin organization ID |
-| `VITE_GITHUB_SCOPE` | GitHub search scope, e.g. `org:your-org` |
 | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App client ID |
 | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App client secret |
 | `GITHUB_OAUTH_REDIRECT_URI` | `http://localhost:8787/api/github/oauth/callback` |
 | `GITHUB_OAUTH_SUCCESS_REDIRECT_URL` | `http://localhost:5173/` |
 | `GITHUB_OAUTH_ALLOWED_ORIGIN` | `http://localhost:5173` |
+| `GITHUB_OAUTH_COOKIE_SECRET` | Any random string (`openssl rand -hex 32`) |
 
 ### 3. Create a GitHub OAuth App
 
@@ -51,7 +54,7 @@ Fill in `.env.local`:
 npm run dev:all
 ```
 
-This starts both the OAuth server (port 8787) and the Vite frontend (port 5173) in one command. The app runs at `http://localhost:5173`.
+This starts both the local API server (port 8787) and Vite (port 5173) in one command. Open `http://localhost:5173` and enter your Devin API key in the Settings panel.
 
 ---
 
@@ -59,7 +62,7 @@ This starts both the OAuth server (port 8787) and the Vite frontend (port 5173) 
 
 ### 1. Push to GitHub and import the repo in Vercel
 
-Go to [vercel.com](https://vercel.com), create a new project, and import your repository. Vercel will auto-detect the Vite build settings.
+Go to [vercel.com](https://vercel.com), create a new project, and import your repository.
 
 ### 2. Set environment variables in the Vercel dashboard
 
@@ -67,9 +70,6 @@ Go to your project → **Settings → Environment Variables** and add:
 
 | Variable | Value |
 |---|---|
-| `VITE_DEVIN_API_KEY` | Your Devin service user API key |
-| `VITE_DEVIN_ORG_ID` | Your Devin organization ID |
-| `VITE_GITHUB_SCOPE` | e.g. `org:your-org` |
 | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth App client ID |
 | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth App client secret |
 | `GITHUB_OAUTH_REDIRECT_URI` | `https://your-app.vercel.app/api/github/oauth/callback` |
@@ -81,7 +81,7 @@ Go to your project → **Settings → Environment Variables** and add:
 
 ### 3. Update your GitHub OAuth App
 
-In your GitHub OAuth App settings, set the callback URL to:
+Set the callback URL in your GitHub OAuth App to:
 
 ```
 https://your-app.vercel.app/api/github/oauth/callback
@@ -89,7 +89,7 @@ https://your-app.vercel.app/api/github/oauth/callback
 
 ### 4. Deploy
 
-Vercel deploys automatically on every push to your main branch. The OAuth API is served as a serverless function — no separate server needed.
+Vercel deploys automatically on every push to your main branch. Users enter their Devin credentials in the app after deploying — no env vars needed for credentials.
 
 ---
 

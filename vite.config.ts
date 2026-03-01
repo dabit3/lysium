@@ -6,13 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api/devin': {
-        target: 'https://api.devin.ai',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/api\/devin/, ''),
-      },
-      '/api/github/oauth': {
+      // All /api/* routes proxied to local dev API server (server/dev-api-server.mjs)
+      '/api': {
         target: 'http://localhost:8787',
         changeOrigin: true,
         secure: false,

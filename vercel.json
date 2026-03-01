@@ -3,6 +3,8 @@
   "outputDirectory": "dist",
   "devCommand": "npm run dev -- --port $PORT",
   "rewrites": [
+    { "source": "/api/devin/session", "destination": "/api/devin/session" },
+    { "source": "/api/devin/proxy/:path*", "destination": "/api/devin/proxy" },
     { "source": "/api/github/oauth/:route*", "destination": "/api/github/oauth/[route]" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]

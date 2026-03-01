@@ -8,7 +8,9 @@
       "Exec(npm)",
       "Exec(mkdir)",
       "Exec(node)",
-      "Exec(python3)"
+      "Exec(python3)",
+      "Exec(curl)",
+      "Exec(npx tsc)"
     ]
   }
 }

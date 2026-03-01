@@ -1046,6 +1046,7 @@
 
 .auth-field input {
   width: 100%;
+  box-sizing: border-box;
   min-height: 36px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -1058,13 +1059,17 @@
 }
 
 .auth-field input:focus-visible {
-  outline: 1px solid var(--accent-primary);
-  outline-offset: 0;
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: inset 0 0 0 1px var(--accent-primary);
 }
 
-.auth-verify-button {
-  min-height: 38px;
+.auth-verify-button,
+.auth-sync-button,
+.auth-clear-button {
+  min-height: 32px;
   font-size: 0.72rem;
+  padding: 0 0.65rem;
 }
 
 .auth-note {
@@ -1706,6 +1711,7 @@
 .settings-drawer-content {
   min-height: 0;
   overflow-y: auto;
+  overflow-x: clip;
 }
 
 .settings-auth-panel {

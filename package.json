@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:oauth": "node server/github-oauth-server.mjs",
-    "dev:all": "node server/github-oauth-server.mjs & vite",
+    "dev:api": "node server/dev-api-server.mjs",
+    "dev:all": "node server/dev-api-server.mjs & vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

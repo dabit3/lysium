@@ -197,6 +197,14 @@ const extractGithubOauthToken = (payload: unknown) => {
   return tokenCandidate.trim()
 }
 
+const extractGithubOauthUserId = (payload: unknown): number | null => {
+  if (!payload || typeof payload !== 'object') return null
+  const candidate = payload as Record<string, unknown>
+  if (typeof candidate.userId === 'number') return candidate.userId
+  if (typeof candidate.user_id === 'number') return candidate.user_id
+  return null
+}
+
 const extractGithubOauthLogin = (payload: unknown) => {
   if (!payload || typeof payload !== 'object') {
     return null
@@ -221,25 +229,12 @@ const extractGithubOauthLogin = (payload: unknown) => {
   return null
 }
 
-const DEVIN_API_BASE_URL = import.meta.env.DEV
-  ? '/api/devin/v3'
-  : 'https://api.devin.ai/v3'
-
-const readEnvString = (value: unknown) =>
-  typeof value === 'string' ? value.trim() : ''
-
-const DEFAULT_DEVIN_API_KEY = readEnvString(import.meta.env.VITE_DEVIN_API_KEY)
-const DEFAULT_DEVIN_ORG_ID = readEnvString(import.meta.env.VITE_DEVIN_ORG_ID)
-const DEFAULT_GITHUB_SCOPE = readEnvString(import.meta.env.VITE_GITHUB_SCOPE)
+const DEVIN_PROXY_BASE_URL = '/api/devin/proxy'
+const DEVIN_SESSION_URL = '/api/devin/session'
 const GITHUB_OAUTH_START_URL = '/api/github/oauth/start'
 const GITHUB_OAUTH_TOKEN_URL = '/api/github/oauth/token'
 const GITHUB_OAUTH_DISCONNECT_URL = '/api/github/oauth/disconnect'
 const HAS_GITHUB_OAUTH_CONFIG = true
-const HAS_BOOTSTRAP_CREDENTIALS =
-  DEFAULT_DEVIN_API_KEY.length > 0 &&
-  DEFAULT_DEVIN_ORG_ID.length > 0 &&
-  DEFAULT_GITHUB_SCOPE.length > 0 &&
-  HAS_GITHUB_OAUTH_CONFIG
 const MAX_CARD_BODY_LINES = 120
 const MAX_CARD_CONTEXT_SUMMARY_LINES = 24
 
@@ -1296,15 +1291,18 @@ function App() {
       (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
       'dark',
   )
-  const [devinApiKey, setDevinApiKey] = useState(DEFAULT_DEVIN_API_KEY)
-  const [devinOrgId, setDevinOrgId] = useState(DEFAULT_DEVIN_ORG_ID)
+  const [devinApiKey, setDevinApiKey] = useState('')
+  const [devinOrgId, setDevinOrgId] = useState('')
   const [devinCreateAsUserId, setDevinCreateAsUserId] = useState('')
+  const [isLoadingDevinSession, setIsLoadingDevinSession] = useState(true)
+  const [hasDevinSession, setHasDevinSession] = useState(false)
   const [hasGithubOauthSession, setHasGithubOauthSession] = useState(false)
   const [githubOauthLogin, setGithubOauthLogin] = useState<string | null>(null)
+  const [githubOauthUserId, setGithubOauthUserId] = useState<number | null>(null)
   const [isRefreshingGithubOauthSession, setIsRefreshingGithubOauthSession] = useState(false)
   const [isDisconnectingGithubOauthSession, setIsDisconnectingGithubOauthSession] =
     useState(false)
-  const [githubSearchScope, setGithubSearchScope] = useState(DEFAULT_GITHUB_SCOPE)
+  const [githubSearchScope, setGithubSearchScope] = useState('')
   const [isVerifyingDevinConnection, setIsVerifyingDevinConnection] =
     useState(false)
   const [hasVerifiedDevinConnection, setHasVerifiedDevinConnection] =
@@ -1427,7 +1425,7 @@ function App() {
     (count, job) => count + (job.status === 'running' ? 1 : 0),
     0,
   )
-  const hasApiKey = devinApiKey.trim().length > 0
+  const hasApiKey = hasDevinSession || devinApiKey.trim().length > 0
   const hasDevinOrgId = devinOrgId.trim().length > 0
   const hasGithubScope = githubSearchScope.trim().length > 0
   const canSyncGithubFeed =
@@ -1611,20 +1609,9 @@ function App() {
   }
 
   const getDevinAuthIssue = () => {
-    const key = devinApiKey.trim()
-    if (!key) {
-      return 'Add a Devin service user API key (cog_...) to run Devin actions.'
+    if (!hasApiKey) {
+      return 'Add a Devin service user API key in settings to run Devin actions.'
     }
-
-    const hasKnownPrefix =
-      key.startsWith('cog_') ||
-      key.startsWith('apk_user_') ||
-      key.startsWith('apk_')
-
-    if (!hasKnownPrefix) {
-      return 'API key format looks invalid. Expected cog_ (recommended) or legacy apk_* key.'
-    }
-
     return null
   }
 
@@ -1642,7 +1629,7 @@ function App() {
   }
 
   const buildDefaultDevinSessionsCollectionEndpoint = () =>
-    `${DEVIN_API_BASE_URL}/organizations/sessions`
+    `${DEVIN_PROXY_BASE_URL}/organizations/sessions`
 
   const buildDevinSessionsCollectionEndpoint = () => {
     const trimmedOrgId = devinOrgId.trim()
@@ -1650,7 +1637,7 @@ function App() {
       return buildDefaultDevinSessionsCollectionEndpoint()
     }
 
-    return `${DEVIN_API_BASE_URL}/organizations/${encodeURIComponent(trimmedOrgId)}/sessions`
+    return `${DEVIN_PROXY_BASE_URL}/organizations/${encodeURIComponent(trimmedOrgId)}/sessions`
   }
 
   const parseDevinError = async (response: Response) => {
@@ -1682,6 +1669,7 @@ function App() {
     if (!HAS_GITHUB_OAUTH_CONFIG) {
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
+      setGithubOauthUserId(null)
       return ''
     }
 
@@ -1698,6 +1686,7 @@ function App() {
       if (response.status === 204 || response.status === 401 || response.status === 404) {
         setHasGithubOauthSession(false)
         setGithubOauthLogin(null)
+        setGithubOauthUserId(null)
         return ''
       }
 
@@ -1709,15 +1698,18 @@ function App() {
       const payload = raw.length > 0 ? (JSON.parse(raw) as unknown) : null
       const token = extractGithubOauthToken(payload)
       const login = extractGithubOauthLogin(payload)
+      const userId = extractGithubOauthUserId(payload)
 
       if (!token) {
         setHasGithubOauthSession(false)
         setGithubOauthLogin(null)
+        setGithubOauthUserId(null)
         return ''
       }
 
       setHasGithubOauthSession(true)
       setGithubOauthLogin(login)
+      setGithubOauthUserId(userId)
       return token
     } catch (error) {
       if (!options?.silent) {
@@ -1748,6 +1740,7 @@ function App() {
     if (!GITHUB_OAUTH_DISCONNECT_URL) {
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
+      setGithubOauthUserId(null)
       return
     }
 
@@ -1768,6 +1761,7 @@ function App() {
 
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
+      setGithubOauthUserId(null)
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to disconnect GitHub OAuth.'
@@ -2109,10 +2103,7 @@ function App() {
 
     const response = await fetch(buildDevinSessionsCollectionEndpoint(), {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${devinApiKey.trim()}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
 
@@ -2142,9 +2133,7 @@ function App() {
 
     for (const sessionsEndpoint of endpoints) {
       const endpoint = `${sessionsEndpoint}/${encodeURIComponent(sessionId)}`
-      const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${devinApiKey.trim()}` },
-      })
+      const response = await fetch(endpoint)
 
       if (response.ok) {
         const data = (await response.json()) as DevinSessionPayload
@@ -2243,7 +2232,9 @@ function App() {
       const summary = scopeLabel ? `${summaryCore} (${scopeLabel})` : summaryCore
       setLastGithubSyncSummary(summary)
       setHasSyncedGithubFeed(true)
-      setIsSettingsOpen(false)
+      if (!isAutoTriggered) {
+        setIsSettingsOpen(false)
+      }
 
       updateJob(jobId, {
         status: 'success',
@@ -2278,10 +2269,9 @@ function App() {
       return
     }
 
-    const authIssue = getDevinAuthIssue()
-    if (authIssue) {
-      setHasVerifiedDevinConnection(false)
-      showToast(authIssue)
+    const keyToSave = devinApiKey.trim()
+    if (!keyToSave && !hasApiKey) {
+      showToast('Add a Devin service user API key to verify.')
       return
     }
 
@@ -2290,11 +2280,27 @@ function App() {
     const jobId = addJob('Verify auth', 'Devin API /organizations/sessions')
 
     try {
-      const response = await fetch(buildDevinSessionsCollectionEndpoint(), {
-        headers: {
-          Authorization: `Bearer ${devinApiKey.trim()}`,
-        },
+      // Save credentials to server session (apiKey omitted if not re-entered — server keeps existing)
+      const saveRes = await fetch(DEVIN_SESSION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(keyToSave ? { apiKey: keyToSave } : {}),
+          orgId: devinOrgId.trim(),
+          createAsUserId: devinCreateAsUserId.trim(),
+          githubSearchScope: githubSearchScope.trim(),
+        }),
       })
+      if (!saveRes.ok) {
+        const err = await saveRes.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error ?? 'Failed to save credentials.')
+      }
+      if (keyToSave) {
+        setDevinApiKey('') // clear input — key is now server-side only
+        setHasDevinSession(true)
+      }
+
+      const response = await fetch(buildDevinSessionsCollectionEndpoint())
 
       if (!response.ok) {
         throw new Error(await parseDevinError(response))
@@ -3480,17 +3486,27 @@ function App() {
   }, [colorTheme])
 
   useEffect(() => {
-    if (!HAS_GITHUB_OAUTH_CONFIG) {
-      return
-    }
-
     void refreshGithubOauthSessionToken({ silent: true })
+
+    fetch(DEVIN_SESSION_URL)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setHasDevinSession(true)
+          setDevinOrgId(data.orgId ?? '')
+          setDevinCreateAsUserId(data.createAsUserId ?? '')
+          setGithubSearchScope(data.githubSearchScope ?? '')
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingDevinSession(false))
   }, [])
 
   useEffect(() => {
     if (
       hasAttemptedStartupSyncRef.current ||
-      !HAS_BOOTSTRAP_CREDENTIALS ||
+      isLoadingDevinSession ||
+      !hasApiKey ||
       !hasGithubOauthSession
     ) {
       return
@@ -3498,7 +3514,7 @@ function App() {
 
     hasAttemptedStartupSyncRef.current = true
     void syncGithubFeedRef.current?.({ autoTriggered: true })
-  }, [hasGithubOauthSession])
+  }, [hasGithubOauthSession, isLoadingDevinSession, hasApiKey])
 
   useEffect(() => {
     if (filteredRepos.length === 0) {
@@ -4008,7 +4024,7 @@ function App() {
       aria-label="Devin API authentication"
     >
       <div className="auth-panel-header">
-        <h3>Devin API</h3>
+        <h3>Devin</h3>
         <span
           className={`auth-chip ${
             hasVerifiedDevinConnection
@@ -4031,7 +4047,7 @@ function App() {
         <input
           type="password"
           value={devinApiKey}
-          placeholder="cog_..."
+          placeholder={hasApiKey ? '••••••••••••' : 'cog_...'}
           autoComplete="off"
           onChange={(event) => {
             setDevinApiKey(event.target.value)
@@ -4069,9 +4085,21 @@ function App() {
         </label>
       </div>
 
+      <button
+        type="button"
+        className="fab-button secondary auth-verify-button"
+        onClick={() => {
+          void handleVerifyDevinConnection()
+        }}
+        disabled={isVerifyingDevinConnection}
+      >
+        {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : null}
+        <span>Verify Devin API key</span>
+      </button>
+
       <div className="auth-inline-grid oauth-actions-grid">
         <div className="auth-panel-header">
-          <h3>GitHub OAuth</h3>
+          <h3>GitHub</h3>
           <span className={`auth-chip ${hasGithubOauthSession ? 'connected' : 'missing'}`}>
             {!HAS_GITHUB_OAUTH_CONFIG
               ? 'not configured'
@@ -4080,6 +4108,31 @@ function App() {
                 : 'not connected'}
           </span>
         </div>
+
+        <label className="auth-field">
+          <span>GitHub scope</span>
+          <input
+            type="text"
+            value={githubSearchScope}
+            placeholder="acme (defaults to org:acme) or user:acme"
+            autoComplete="off"
+            onChange={(event) => {
+              setGithubSearchScope(event.target.value)
+            }}
+          />
+        </label>
+
+        <button
+          type="button"
+          className="fab-button primary auth-sync-button"
+          onClick={() => {
+            void handleSyncGithubFeed()
+          }}
+          disabled={isSyncingGithubFeed || isVerifyingDevinConnection || !canSyncGithubFeed}
+        >
+          {isSyncingGithubFeed ? <span className="spinner" aria-hidden="true" /> : null}
+          <span>{isSyncingGithubFeed ? 'Syncing GitHub Feed...' : 'Sync GitHub Feed'}</span>
+        </button>
 
         <button
           type="button"
@@ -4096,30 +4149,10 @@ function App() {
           </span>
         </button>
 
-        <button
-          type="button"
-          className="fab-button secondary auth-verify-button"
-          onClick={() => {
-            void refreshGithubOauthSessionToken()
-          }}
-          disabled={
-            !HAS_GITHUB_OAUTH_CONFIG ||
-            isRefreshingGithubOauthSession ||
-            isDisconnectingGithubOauthSession
-          }
-        >
-          {isRefreshingGithubOauthSession ? <span className="spinner" aria-hidden="true" /> : null}
-          <span>
-            {isRefreshingGithubOauthSession
-              ? 'Checking GitHub OAuth...'
-              : 'Refresh GitHub OAuth Session'}
-          </span>
-        </button>
-
         {GITHUB_OAUTH_DISCONNECT_URL ? (
           <button
             type="button"
-            className="fab-button secondary auth-verify-button"
+            className="fab-button danger auth-verify-button"
             onClick={() => {
               void handleDisconnectGithubOauth()
             }}
@@ -4129,13 +4162,9 @@ function App() {
               isDisconnectingGithubOauthSession
             }
           >
-            {isDisconnectingGithubOauthSession ? (
-              <span className="spinner" aria-hidden="true" />
-            ) : null}
+            {isDisconnectingGithubOauthSession ? <span className="spinner" aria-hidden="true" /> : null}
             <span>
-              {isDisconnectingGithubOauthSession
-                ? 'Disconnecting GitHub OAuth...'
-                : 'Disconnect GitHub OAuth'}
+              {isDisconnectingGithubOauthSession ? 'Disconnecting...' : 'Disconnect GitHub OAuth'}
             </span>
           </button>
         ) : null}
@@ -4143,53 +4172,13 @@ function App() {
         {githubOauthLogin ? <p className="auth-note">Connected as {githubOauthLogin}.</p> : null}
 
         {!HAS_GITHUB_OAUTH_CONFIG ? (
-          <p className="auth-note">
-            Set VITE_GITHUB_OAUTH_START_URL and VITE_GITHUB_OAUTH_TOKEN_URL to enable
-            GitHub OAuth.
-          </p>
+          <p className="auth-note">GitHub OAuth is not configured on this server.</p>
+        ) : null}
+
+        {lastGithubSyncSummary ? (
+          <p className="auth-sync-meta">Last sync: {lastGithubSyncSummary}</p>
         ) : null}
       </div>
-
-      <div className="auth-inline-grid">
-        <label className="auth-field">
-          <span>GitHub scope</span>
-          <input
-            type="text"
-            value={githubSearchScope}
-            placeholder="acme (defaults to org:acme) or user:acme"
-            autoComplete="off"
-            onChange={(event) => {
-              setGithubSearchScope(event.target.value)
-            }}
-          />
-        </label>
-      </div>
-
-      <button
-        type="button"
-        className="fab-button secondary auth-verify-button"
-        onClick={() => {
-          void handleVerifyDevinConnection()
-        }}
-        disabled={isVerifyingDevinConnection}
-      >
-        {isVerifyingDevinConnection ? (
-          <span className="spinner" aria-hidden="true" />
-        ) : null}
-        <span>Verify Devin API key</span>
-      </button>
-
-      <button
-        type="button"
-        className="fab-button primary auth-sync-button"
-        onClick={() => {
-          void handleSyncGithubFeed()
-        }}
-        disabled={isSyncingGithubFeed || isVerifyingDevinConnection || !canSyncGithubFeed}
-      >
-        {isSyncingGithubFeed ? <span className="spinner" aria-hidden="true" /> : null}
-        <span>{isSyncingGithubFeed ? 'Syncing GitHub Feed...' : 'Sync GitHub Feed'}</span>
-      </button>
 
       <button
         type="button"
@@ -4198,16 +4187,6 @@ function App() {
       >
         <span>Clear Local Storage</span>
       </button>
-
-      {lastGithubSyncSummary ? (
-        <p className="auth-sync-meta">Last sync: {lastGithubSyncSummary}</p>
-      ) : null}
-
-      <p className="auth-note">
-        {HAS_GITHUB_OAUTH_CONFIG
-          ? 'GitHub feed sync uses GitHub OAuth. Devin API key is used for action automation.'
-          : 'GitHub feed sync requires GitHub OAuth backend URLs in your environment.'}
-      </p>
     </section>
   )
 
