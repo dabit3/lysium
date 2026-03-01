@@ -240,6 +240,7 @@ const MAX_CARD_CONTEXT_SUMMARY_LINES = 24
 
 const ASSESSED_ISSUES_STORAGE_KEY = 'minion.assessed_issues.v1'
 const ASSESSED_PRS_STORAGE_KEY = 'minion.assessed_prs.v1'
+const GITHUB_SCOPE_STORAGE_KEY = 'minion.github_scope.v1'
 const ASSESSED_ISSUES_RETENTION_MS = 1000 * 60 * 60 * 24 * 90
 
 const normalizeSummaryLine = (line: string) =>
@@ -572,6 +573,19 @@ const loadAssessedPrLookup = () => {
     }, {})
   } catch {
     return {} as Record<string, AssessedIssueEntry>
+  }
+}
+
+const loadGithubSearchScope = () => {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  try {
+    const raw = window.localStorage.getItem(GITHUB_SCOPE_STORAGE_KEY)
+    return typeof raw === 'string' ? raw : ''
+  } catch {
+    return ''
   }
 }
 
@@ -1302,7 +1316,8 @@ function App() {
   const [isRefreshingGithubOauthSession, setIsRefreshingGithubOauthSession] = useState(false)
   const [isDisconnectingGithubOauthSession, setIsDisconnectingGithubOauthSession] =
     useState(false)
-  const [githubSearchScope, setGithubSearchScope] = useState('')
+  const [isClearingSession, setIsClearingSession] = useState(false)
+  const [githubSearchScope, setGithubSearchScope] = useState(() => loadGithubSearchScope())
   const [isVerifyingDevinConnection, setIsVerifyingDevinConnection] =
     useState(false)
   const [hasVerifiedDevinConnection, setHasVerifiedDevinConnection] =
@@ -3443,6 +3458,58 @@ function App() {
     }
   }
 
+  const handleClearSession = async () => {
+    if (isClearingSession) {
+      return
+    }
+
+    setIsClearingSession(true)
+
+    try {
+      const devinResponse = await fetch(DEVIN_SESSION_URL, {
+        method: 'DELETE',
+        headers: {
+          Accept: 'application/json',
+        },
+        credentials: 'include',
+      })
+
+      if (!devinResponse.ok && devinResponse.status !== 204) {
+        throw new Error(await parseDevinError(devinResponse))
+      }
+
+      if (GITHUB_OAUTH_DISCONNECT_URL) {
+        const githubResponse = await fetch(GITHUB_OAUTH_DISCONNECT_URL, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+          },
+          credentials: 'include',
+        })
+
+        if (!githubResponse.ok && githubResponse.status !== 204) {
+          throw new Error(await parseDevinError(githubResponse))
+        }
+      }
+
+      setHasDevinSession(false)
+      setDevinApiKey('')
+      setDevinOrgId('')
+      setDevinCreateAsUserId('')
+      setHasVerifiedDevinConnection(false)
+      setHasGithubOauthSession(false)
+      setGithubOauthLogin(null)
+      setGithubOauthUserId(null)
+      showToast('Session cleared.')
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to clear active session.'
+      showToast(`Session clear failed: ${message}`)
+    } finally {
+      setIsClearingSession(false)
+    }
+  }
+
   const handleClearLocalStorage = () => {
     setAssessedIssueLookup({})
     setAssessedPrLookup({})
@@ -3486,6 +3553,16 @@ function App() {
   }, [colorTheme])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    try {
+      window.localStorage.setItem(GITHUB_SCOPE_STORAGE_KEY, githubSearchScope)
+    } catch {}
+  }, [githubSearchScope])
+
+  useEffect(() => {
     void refreshGithubOauthSessionToken({ silent: true })
 
     fetch(DEVIN_SESSION_URL)
@@ -3495,7 +3572,12 @@ function App() {
           setHasDevinSession(true)
           setDevinOrgId(data.orgId ?? '')
           setDevinCreateAsUserId(data.createAsUserId ?? '')
-          setGithubSearchScope(data.githubSearchScope ?? '')
+          if (typeof data.githubSearchScope === 'string') {
+            const serverScope = data.githubSearchScope
+            setGithubSearchScope((previous) =>
+              serverScope.trim().length > 0 ? serverScope : previous,
+            )
+          }
         }
       })
       .catch(() => {})
@@ -4180,13 +4262,28 @@ function App() {
         ) : null}
       </div>
 
-      <button
-        type="button"
-        className="fab-button secondary auth-clear-button"
-        onClick={handleClearLocalStorage}
-      >
-        <span>Clear Local Storage</span>
-      </button>
+      <div className="auth-inline-grid auth-reset-row">
+        <button
+          type="button"
+          className="fab-button danger auth-clear-button"
+          onClick={() => {
+            void handleClearSession()
+          }}
+          disabled={isClearingSession || isVerifyingDevinConnection || isSyncingGithubFeed}
+        >
+          {isClearingSession ? <span className="spinner" aria-hidden="true" /> : null}
+          <span>{isClearingSession ? 'Clearing Session...' : 'Clear Session'}</span>
+        </button>
+
+        <button
+          type="button"
+          className="fab-button secondary auth-clear-button"
+          onClick={handleClearLocalStorage}
+          disabled={isClearingSession}
+        >
+          <span>Clear Local Storage</span>
+        </button>
+      </div>
     </section>
   )
 
@@ -4287,7 +4384,7 @@ function App() {
           </section>
         ) : (
           <section className="deck-shell" key={`tab-${activeTab}`}>
-            <div className="deck-frame">
+            <div className="deck-frame deck-frame-swipe">
               {visibleCards.length === 0 ? (
                 <div className="empty-state">
                   <p>
@@ -4488,7 +4585,9 @@ function App() {
                         </div>
                       ) : null}
 
-                      <div className="card-scroll-content">
+                      <div
+                        className={`card-scroll-content ${card.kind === 'issue' ? 'issue-scroll-content' : ''}`.trim()}
+                      >
                         {markdownBlocks.map((block, blockIndex) => {
                           if (block.kind === 'code') {
                             const codeTokens = highlightCodeTokens(block.content, block.language)
