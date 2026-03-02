@@ -1,10 +1,10 @@
 # Lysium
 
-A cross-platform control plane for agent-first software delivery.
+A cross-platform control plane for async, agent-driven software delivery.
 
 ## Features
 
-- Run multiple agent sessions in parallel across repositories
+- Run multiple background agent sessions in parallel across repositories
 - Launch agent-based requests from existing issues and PRs
 - Mobile and desktop triage views optimized for fast issue and PR decisioning
 - Swipe actions for close, merge, create PR, and skip-to-tail workflows
