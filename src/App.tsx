@@ -4716,7 +4716,7 @@ function App() {
             onClick={() => {
               void handleVerifyDevinConnection()
             }}
-            disabled={isVerifyingDevinConnection}
+            disabled={isVerifyingDevinConnection || !hasDevinOrgId}
           >
             {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={14} />}
             <span>Connect to Devin</span>

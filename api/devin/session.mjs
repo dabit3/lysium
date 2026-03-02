@@ -97,12 +97,15 @@ export default async function handler(req, res) {
       return
     }
 
+    if (!orgId) {
+      res.status(400).json({ error: 'orgId is required.' })
+      return
+    }
+
     // Only validate against Devin API when a new key is provided
     if (newApiKey) {
       const devinBase = 'https://api.devin.ai/v3'
-      const endpoint = orgId
-        ? `${devinBase}/organizations/${encodeURIComponent(orgId)}/sessions?limit=1`
-        : `${devinBase}/sessions?limit=1`
+      const endpoint = `${devinBase}/organizations/${encodeURIComponent(orgId)}/sessions?limit=1`
 
       try {
         const check = await fetch(endpoint, {
