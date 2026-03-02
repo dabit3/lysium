@@ -12,6 +12,7 @@ An elegant cross-platform control plane for agent-first software delivery.
 - Automated PR review
 - Activity panel showing all agent sessions and actions
 - GitHub OAuth sync with scope controls (`user:`, `org:`, `repo:`)
+- Powered by [Devin](https://devin.ai/)
 
 ![Lysium](banner.png)
 
