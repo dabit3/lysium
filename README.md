@@ -1,6 +1,17 @@
 # Lysium
 
-Agent-first command layer for dev Capture intent, launch execution, merge outcomes — without breaking flow.
+An elegant and cross-platform control plane for agent-first software delivery.
+
+## Features
+
+- Run multiple agent sessions in parallel across repositories
+- Launch agent-based requests from existing issues and PRs
+- Mobile and desktop triage views optimized for fast issue and PR decisioning
+- Swipe actions for close, merge, create PR, and skip-to-tail workflows
+- Agent-powered Assess flows for issue necessity and PR merge decisions
+- Automated PR review
+- Activity panel showing all agent sessions and actions
+- GitHub OAuth sync with scope controls (`user:`, `org:`, `repo:`)
 
 ![Lysium](banner.png)
 
@@ -8,7 +19,7 @@ Agent-first command layer for dev Capture intent, launch execution, merge outcom
 
 ## How credentials work
 
-Lysium does not store credentials in the browser. Users enter their Devin API key, org ID, and GitHub scope once in the app's Settings panel. The credentials are validated against the Devin API and then stored in a signed `HttpOnly` cookie — they never touch `localStorage` or the browser's JS environment after that. All Devin API calls are proxied through the server.
+Lysium does not store Devin credentials in browser storage. Users enter their Devin API key, org ID, and GitHub scope in the app UI. Credentials are validated and stored server-side in signed `HttpOnly` cookies, and Devin API calls are proxied through the server.
 
 ---
 
@@ -16,6 +27,7 @@ Lysium does not store credentials in the browser. Users enter their Devin API ke
 
 - Node.js 18+
 - A GitHub OAuth App
+- A Devin API key (`cog_...`) and organization ID
 
 ---
 
@@ -56,7 +68,16 @@ Fill in `.env.local`:
 npm run dev:all
 ```
 
-This starts both the local API server (port 8787) and Vite (port 5173) in one command. Open `http://localhost:5173` and enter your Devin API key in the Settings panel.
+This starts both the local API server (port 8787) and Vite (port 5173). Open `http://localhost:5173`, sign in with GitHub, then connect Devin from the startup auth panel (or Settings).
+
+---
+
+## GitHub scope behavior
+
+- On first GitHub OAuth sign-in, scope defaults to `user:<your-login>`.
+- You can set scope to `user:<username>`, `org:<org>`, or `repo:<owner/repo>`.
+- If you enter a value without a prefix (for example `acme`), Lysium treats it as `org:acme`.
+- OAuth is requested with `repo` scope, so private repositories in your selected scope can be included.
 
 ---
 
@@ -90,17 +111,20 @@ https://your-app.vercel.app/api/github/oauth/callback
 
 ### 4. Deploy
 
-Vercel deploys automatically on every push to your main branch. Users enter their Devin credentials in the app after deploying — no env vars needed for credentials.
+Vercel deploys automatically on pushes to your main branch. Users connect GitHub and enter Devin credentials in the app UI after deploy.
 
 ---
 
 ## How it works
 
-- Connect GitHub via OAuth to sync issues and pull requests from your organization
+- Connect GitHub via OAuth to sync open issues and pull requests from your configured scope
 - Swipe right on an issue to have Devin open a pull request
 - Swipe left on an issue to close it on GitHub
 - Swipe right on a pull request to merge it (or enroll auto-merge if checks are pending)
 - Swipe left on a pull request to close it without merging
-- Use the Assess button to have Devin analyze an issue or PR and return a recommendation
-- Use the Code tab to submit a feature request to Devin for any repository in your feed
-- All Devin sessions and GitHub actions are tracked in the Activity drawer
+- Swipe down on issues or PRs to skip and move them to the tail
+- Use **Assess** to have Devin evaluate issue necessity or PR merge decisions
+- Use **Review** to open Devin review sessions for PRs when available
+- Use the **Code** tab to start a Devin implementation request (including “Devin’s machine” mode)
+- Use **Leave Comment** to post manual PR comments (with optional Devin mention tagging)
+- Track everything in Activity, split into **Sessions** and **Actions**
