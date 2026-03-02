@@ -1336,7 +1336,7 @@ function App() {
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_WIDE_LAYOUT_MEDIA_QUERY).matches,
   )
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
-  const [activityPanelView, setActivityPanelView] = useState<'sessions' | 'activity'>('sessions')
+  const [activityPanelView, setActivityPanelView] = useState<'sessions' | 'actions'>('sessions')
   const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
     () =>
       (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
@@ -1373,6 +1373,7 @@ function App() {
   const [repoFilterQuery, setRepoFilterQuery] = useState('')
   const [repoRequestPrompt, setRepoRequestPrompt] = useState('')
   const [isCreatingRepoRequest, setIsCreatingRepoRequest] = useState(false)
+  const [shipLaunchCount, setShipLaunchCount] = useState(0)
   const [assessedIssueLookup, setAssessedIssueLookup] = useState<
     Record<string, AssessedIssueEntry>
   >(() => loadAssessedIssueLookup())
@@ -3025,6 +3026,7 @@ function App() {
       return
     }
 
+    setShipLaunchCount((count) => count + 1)
     setIsCreatingRepoRequest(true)
     const targetLabel = isDevinsMachineTarget ? DEVINS_MACHINE_REPO_LABEL : repo
     const prompt = isDevinsMachineTarget
@@ -4276,6 +4278,9 @@ function App() {
               onChange={(event) => setRepoFilterQuery(event.target.value)}
               placeholder="Search by owner/repo"
               autoComplete="off"
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
             />
           </label>
 
@@ -4335,10 +4340,17 @@ function App() {
             placeholder="e.g. add feature xyz and include tests"
             disabled={isCreatingRepoRequest || !selectedRepo}
             rows={4}
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
           />
           <button
             type="submit"
-            className="fab-button primary repo-request-button"
+            className={`fab-button primary repo-request-button ${
+              !prefersReducedMotion && shipLaunchCount > 0
+                ? `ship-launch-${shipLaunchCount % 2}`
+                : ''
+            }`.trim()}
             disabled={
               isCreatingRepoRequest || !selectedRepo || repoRequestPrompt.trim().length === 0
             }
@@ -4413,6 +4425,9 @@ function App() {
               value={githubSearchScope}
               placeholder="acme (defaults to org:acme) or user:acme"
               autoComplete="off"
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
               onChange={(event) => {
                 setGithubSearchScope(event.target.value)
               }}
@@ -4489,6 +4504,9 @@ function App() {
           value={devinApiKey}
           placeholder={hasApiKey ? 'Stored server-side (enter to replace)' : 'cog_...'}
           autoComplete="off"
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
           onChange={(event) => {
             setDevinApiKey(event.target.value)
             setHasVerifiedDevinConnection(false)
@@ -4507,6 +4525,9 @@ function App() {
             value={devinOrgId}
             placeholder="org_id"
             autoComplete="off"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
             onChange={(event) => {
               setDevinOrgId(event.target.value)
               setHasVerifiedDevinConnection(false)
@@ -4521,6 +4542,9 @@ function App() {
             value={devinCreateAsUserId}
             placeholder="user_id"
             autoComplete="off"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
             onChange={(event) => {
               setDevinCreateAsUserId(event.target.value)
             }}
@@ -4528,29 +4552,31 @@ function App() {
         </label>
       </div>
 
-      <div className={`auth-inline-grid ${hasVerifiedDevinConnection ? 'single-column' : ''}`.trim()}>
-        <button
-          type="button"
-          className="fab-button secondary auth-verify-button"
-          onClick={() => {
-            void handleVerifyDevinConnection()
-          }}
-          disabled={isVerifyingDevinConnection}
-        >
-          {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={14} />}
-          <span>Connect to Devin</span>
-        </button>
-        {!hasVerifiedDevinConnection ? (
-          <a
-            href="https://app.devin.ai"
-            target="_blank"
-            rel="noreferrer noopener"
-            className="fab-button assess-button pr-assess-action auth-verify-button"
+      {!(panelClassName === 'startup-auth-panel' && hasVerifiedDevinConnection) ? (
+        <div className={`auth-inline-grid ${hasVerifiedDevinConnection ? 'single-column' : ''}`.trim()}>
+          <button
+            type="button"
+            className="fab-button secondary auth-verify-button"
+            onClick={() => {
+              void handleVerifyDevinConnection()
+            }}
+            disabled={isVerifyingDevinConnection}
           >
-            Get API Key
-          </a>
-        ) : null}
-      </div>
+            {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={14} />}
+            <span>Connect to Devin</span>
+          </button>
+          {!hasVerifiedDevinConnection ? (
+            <a
+              href="https://app.devin.ai/login?prompt=empty"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="fab-button assess-button pr-assess-action auth-verify-button"
+            >
+              Get API Key
+            </a>
+          ) : null}
+        </div>
+      ) : null}
 
       {panelClassName !== 'startup-auth-panel' ? (
         <div className="auth-danger-zone">
@@ -4661,7 +4687,7 @@ function App() {
   const renderRecentActionsSectionContent = () => (
     <>
       <div className="jobs-section-header">
-        <h4>Activity</h4>
+        <h4>Actions</h4>
         <span>{actionStream.length}</span>
       </div>
 
@@ -4686,11 +4712,11 @@ function App() {
   const renderActivityPanel = (panelClassName?: string) => (
     <section
       className={`auth-panel ${panelClassName ?? ''}`.trim()}
-      aria-label="Sessions and activity"
+      aria-label="Sessions and actions"
     >
       <div className="auth-panel-header">
         <h3>Activity</h3>
-        <div className="activity-view-toggle" role="tablist" aria-label="Activity view">
+        <div className="activity-view-toggle" role="tablist" aria-label="Session and action view">
           <button
             type="button"
             role="tab"
@@ -4703,11 +4729,11 @@ function App() {
           <button
             type="button"
             role="tab"
-            className={`activity-toggle-button ${activityPanelView === 'activity' ? 'is-active' : ''}`.trim()}
-            aria-selected={activityPanelView === 'activity'}
-            onClick={() => setActivityPanelView('activity')}
+            className={`activity-toggle-button ${activityPanelView === 'actions' ? 'is-active' : ''}`.trim()}
+            aria-selected={activityPanelView === 'actions'}
+            onClick={() => setActivityPanelView('actions')}
           >
-            Activity
+            Actions
           </button>
         </div>
       </div>
@@ -4717,7 +4743,7 @@ function App() {
             {renderJobsSectionContent()}
           </section>
         ) : (
-          <section className="jobs-drawer-section" aria-label="Activity">
+          <section className="jobs-drawer-section" aria-label="Actions">
             {renderRecentActionsSectionContent()}
           </section>
         )}
@@ -5482,6 +5508,9 @@ function App() {
                 value={commentBody}
                 onChange={(event) => setCommentBody(event.target.value)}
                 placeholder="Write a clear review comment..."
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
               />
 
               <div className="modal-actions">
@@ -5593,7 +5622,7 @@ function App() {
               className="jobs-drawer"
               role="dialog"
               aria-modal="true"
-              aria-label="Sessions and activity"
+              aria-label="Sessions and actions"
               onClick={(event) => event.stopPropagation()}
               initial={drawerPanelInitial}
               animate={{ x: 0, opacity: 1 }}
@@ -5606,7 +5635,29 @@ function App() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={getDrawerContentTransition(0.03)}
               >
-                <h3>Activity</h3>
+                <div className="jobs-drawer-header-main">
+                  <h3>Activity</h3>
+                  <div className="activity-view-toggle" role="tablist" aria-label="Session and action view">
+                    <button
+                      type="button"
+                      role="tab"
+                      className={`activity-toggle-button ${activityPanelView === 'sessions' ? 'is-active' : ''}`.trim()}
+                      aria-selected={activityPanelView === 'sessions'}
+                      onClick={() => setActivityPanelView('sessions')}
+                    >
+                      Sessions
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      className={`activity-toggle-button ${activityPanelView === 'actions' ? 'is-active' : ''}`.trim()}
+                      aria-selected={activityPanelView === 'actions'}
+                      onClick={() => setActivityPanelView('actions')}
+                    >
+                      Actions
+                    </button>
+                  </div>
+                </div>
                 <button
                   type="button"
                   className="jobs-close"
@@ -5617,30 +5668,32 @@ function App() {
               </motion.div>
 
               <motion.div
-                className="jobs-drawer-content"
+                className="jobs-drawer-content activity-content-single"
                 initial={drawerContentInitial}
                 animate={{ opacity: 1, y: 0 }}
                 transition={getDrawerContentTransition(0.07)}
               >
-                <motion.section
-                  className="jobs-drawer-section"
-                  aria-label="Sessions"
-                  initial={drawerContentInitial}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={getDrawerContentTransition(0.11)}
-                >
-                  {renderJobsSectionContent({ closeOnLinkClick: true })}
-                </motion.section>
-
-                <motion.section
-                  className="jobs-drawer-section"
-                  aria-label="Activity"
-                  initial={drawerContentInitial}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={getDrawerContentTransition(0.15)}
-                >
-                  {renderRecentActionsSectionContent()}
-                </motion.section>
+                {activityPanelView === 'sessions' ? (
+                  <motion.section
+                    className="jobs-drawer-section"
+                    aria-label="Sessions"
+                    initial={drawerContentInitial}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={getDrawerContentTransition(0.11)}
+                  >
+                    {renderJobsSectionContent({ closeOnLinkClick: true })}
+                  </motion.section>
+                ) : (
+                  <motion.section
+                    className="jobs-drawer-section"
+                    aria-label="Actions"
+                    initial={drawerContentInitial}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={getDrawerContentTransition(0.11)}
+                  >
+                    {renderRecentActionsSectionContent()}
+                  </motion.section>
+                )}
               </motion.div>
             </motion.aside>
           </motion.div>
