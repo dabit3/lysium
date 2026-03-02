@@ -1,6 +1,6 @@
 # Lysium
 
-A mobile-first GitHub triage tool. Swipe through issues and pull requests, close or merge them directly, and delegate implementation work to [Devin](https://devin.ai). Built with React, TypeScript, and Vite.
+GitHub triage reimagined as a gesture layer over AI agents. Ship, assess, delegate, merge, close, review, all from your thumb.
 
 ---
 

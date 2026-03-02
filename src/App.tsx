@@ -1337,6 +1337,8 @@ function App() {
   )
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
   const [activityPanelView, setActivityPanelView] = useState<'sessions' | 'actions'>('sessions')
+  const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
+  const [startupIntroCycle, setStartupIntroCycle] = useState(0)
   const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
     () =>
       (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
@@ -1359,9 +1361,7 @@ function App() {
   const [hasVerifiedDevinConnection, setHasVerifiedDevinConnection] =
     useState(false)
   const [isSyncingGithubFeed, setIsSyncingGithubFeed] = useState(false)
-  const [lastGithubSyncSummary, setLastGithubSyncSummary] = useState<
-    string | null
-  >(null)
+  const [, setLastGithubSyncSummary] = useState<string | null>(null)
   const [hasSyncedGithubFeed, setHasSyncedGithubFeed] = useState(false)
   const [pullRequestContentView, setPullRequestContentView] = useState<'summary' | 'code'>(
     'summary',
@@ -1393,7 +1393,8 @@ function App() {
   const dragStartRef = useRef({ x: 0, y: 0 })
   const dragOffsetRef = useRef({ x: 0, y: 0 })
   const dragVelocityRef = useRef(0)
-  const dragLastSampleRef = useRef({ x: 0, time: 0 })
+  const dragVerticalVelocityRef = useRef(0)
+  const dragLastSampleRef = useRef({ x: 0, y: 0, time: 0 })
   const toastTimeoutRef = useRef<number | null>(null)
   const pendingUndoRef = useRef<{ timeoutId: number; cancelled: boolean } | null>(null)
   const nextJobIdRef = useRef(
@@ -1536,6 +1537,28 @@ function App() {
       shouldAutoSyncStartup)
   const shouldShowCredentialSetup = !hasActiveGithubFeed && !showStartupLoadingState
 
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setStartupIntroPhase('done')
+      return
+    }
+
+    if (!shouldShowCredentialSetup) {
+      setStartupIntroPhase('idle')
+      return
+    }
+
+    setStartupIntroCycle((previous) => previous + 1)
+    setStartupIntroPhase('playing')
+    const timeoutId = window.setTimeout(() => {
+      setStartupIntroPhase('done')
+    }, 1250)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [prefersReducedMotion, shouldShowCredentialSetup])
+
   const showToast = (message: string, onUndo?: () => void, timeoutMs?: number) => {
     setToastMessage(message)
     setToastUndoCallback(() => onUndo ?? null)
@@ -1559,6 +1582,7 @@ function App() {
   const resetDrag = () => {
     updateDragOffset({ x: 0, y: 0 })
     dragVelocityRef.current = 0
+    dragVerticalVelocityRef.current = 0
     setIsDragging(false)
     setIsAnimatingOut(false)
     setSwipeDirection(null)
@@ -2815,24 +2839,29 @@ function App() {
   }
 
   const releaseDrag = () => {
-    const horizontalDistanceThreshold = Math.max(92, window.innerWidth * 0.23)
-    const downwardDistanceThreshold = Math.max(24, window.innerHeight * 0.03)
+    const horizontalDistanceThreshold = Math.max(86, window.innerWidth * 0.21)
+    const downwardDistanceThreshold = Math.max(14, window.innerHeight * 0.02)
     const { x, y } = dragOffsetRef.current
     const velocityX = dragVelocityRef.current
-    const hasFlickIntent = Math.abs(velocityX) >= 0.55 && Math.abs(x) > 24
+    const velocityY = dragVerticalVelocityRef.current
+    const hasHorizontalFlickIntent = Math.abs(velocityX) >= 0.52 && Math.abs(x) > 22
     const downwardDistance = Math.max(y, 0)
-    const hasDownwardIntent =
+    const hasDownwardDistanceIntent =
       downwardDistance >= downwardDistanceThreshold &&
-      downwardDistance > Math.abs(x) * 0.65
+      downwardDistance > Math.abs(x) * 0.52
+    const hasDownwardFlickIntent =
+      velocityY >= 0.48 &&
+      downwardDistance >= 10 &&
+      downwardDistance > Math.abs(x) * 0.35
 
-    if (hasDownwardIntent) {
+    if (hasDownwardDistanceIntent || hasDownwardFlickIntent) {
       commitSwipe('down')
       return
     }
 
-    if (Math.abs(x) >= horizontalDistanceThreshold || hasFlickIntent) {
+    if (Math.abs(x) >= horizontalDistanceThreshold || hasHorizontalFlickIntent) {
       const direction: SwipeDirection =
-        Math.abs(x) >= 24
+        Math.abs(x) >= 22
           ? x > 0
             ? 'right'
             : 'left'
@@ -2867,8 +2896,9 @@ function App() {
 
     pointerIdRef.current = event.pointerId
     dragStartRef.current = { x: event.clientX, y: event.clientY }
-    dragLastSampleRef.current = { x: event.clientX, time: event.timeStamp }
+    dragLastSampleRef.current = { x: event.clientX, y: event.clientY, time: event.timeStamp }
     dragVelocityRef.current = 0
+    dragVerticalVelocityRef.current = 0
     setIsDragging(true)
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -2878,14 +2908,22 @@ function App() {
       return
     }
 
+    event.preventDefault()
+
     const now = event.timeStamp
     const deltaTime = Math.max(now - dragLastSampleRef.current.time, 1)
     const deltaX = event.clientX - dragLastSampleRef.current.x
+    const deltaY = event.clientY - dragLastSampleRef.current.y
     dragVelocityRef.current = deltaX / deltaTime
-    dragLastSampleRef.current = { x: event.clientX, time: now }
+    dragVerticalVelocityRef.current = deltaY / deltaTime
+    dragLastSampleRef.current = { x: event.clientX, y: event.clientY, time: now }
 
     const offsetX = event.clientX - dragStartRef.current.x
-    const offsetY = (event.clientY - dragStartRef.current.y) * 0.22
+    const rawOffsetY = event.clientY - dragStartRef.current.y
+    const offsetY =
+      rawOffsetY >= 0
+        ? Math.min(rawOffsetY * 0.58, 260)
+        : rawOffsetY * 0.26
 
     updateDragOffset({ x: offsetX, y: offsetY })
   }
@@ -3686,6 +3724,7 @@ function App() {
     dragOffsetRef.current = { x: 0, y: 0 }
     setDragOffset({ x: 0, y: 0 })
     dragVelocityRef.current = 0
+    dragVerticalVelocityRef.current = 0
     setIsDragging(false)
     setIsAnimatingOut(false)
     setSwipeDirection(null)
@@ -4184,10 +4223,98 @@ function App() {
         duration: 0.16,
         ease: 'easeOut',
       }
+  const desktopRailViewTransition: Transition = prefersReducedMotion
+    ? {
+        type: 'tween',
+        duration: 0.1,
+        ease: 'easeOut',
+      }
+    : {
+        type: 'tween',
+        duration: 0.18,
+        ease: 'easeOut',
+      }
+  const desktopRailViewInitial = prefersReducedMotion
+    ? { opacity: 0 }
+    : { opacity: 0, y: 8, scale: 0.995 }
+  const desktopRailViewExit = prefersReducedMotion
+    ? { opacity: 0 }
+    : { opacity: 0, y: -6, scale: 0.995 }
+  const shouldPlayStartupIntro =
+    !prefersReducedMotion && shouldShowCredentialSetup && startupIntroPhase === 'playing'
+  const getStartupIntroTransition = (delay: number): Transition =>
+    shouldPlayStartupIntro
+      ? {
+          type: 'spring',
+          stiffness: 350,
+          damping: 34,
+          mass: 0.92,
+          delay,
+        }
+      : {
+          type: 'tween',
+          duration: 0.12,
+          ease: 'easeOut',
+        }
+  const startupLoadingPanelTransition: Transition = prefersReducedMotion
+    ? {
+        type: 'tween',
+        duration: 0.1,
+        ease: 'easeOut',
+      }
+    : {
+        type: 'spring',
+        stiffness: 340,
+        damping: 32,
+        mass: 0.9,
+      }
+  const getStartupLoadingChildTransition = (delay: number): Transition =>
+    prefersReducedMotion
+      ? {
+          type: 'tween',
+          duration: 0.08,
+          ease: 'easeOut',
+        }
+      : {
+          type: 'spring',
+          stiffness: 360,
+          damping: 33,
+          mass: 0.9,
+          delay,
+        }
+  const pullRequestViewTransition: Transition = prefersReducedMotion
+    ? {
+        type: 'tween',
+        duration: 0.08,
+        ease: 'easeOut',
+      }
+    : {
+        type: 'tween',
+        duration: 0.16,
+        ease: 'easeOut',
+      }
+  const pullRequestViewInitial = prefersReducedMotion
+    ? { opacity: 0 }
+    : { opacity: 0, y: 5 }
+  const pullRequestViewExit = prefersReducedMotion
+    ? { opacity: 0 }
+    : { opacity: 0, y: -4 }
 
   const renderStartupLoadingState = () => (
-    <section className="startup-loading-panel" aria-live="polite" aria-label="Loading feed">
-      <div className="startup-skeleton-frame">
+    <motion.section
+      className="startup-loading-panel"
+      aria-live="polite"
+      aria-label="Loading feed"
+      initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.99 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={startupLoadingPanelTransition}
+    >
+      <motion.div
+        className="startup-skeleton-frame"
+        initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.995 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={getStartupLoadingChildTransition(0.07)}
+      >
         <div className="skeleton-card">
           <div className="skeleton-header">
             <div className="skeleton-avatar" />
@@ -4225,9 +4352,16 @@ function App() {
             <div className="skeleton-action" />
           </div>
         </div>
-      </div>
-      <p className="skeleton-caption">Loading...</p>
-    </section>
+      </motion.div>
+      <motion.p
+        className="skeleton-caption"
+        initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={getStartupLoadingChildTransition(0.14)}
+      >
+        Loading...
+      </motion.p>
+    </motion.section>
   )
 
   const renderReposPanel = () => (
@@ -4473,9 +4607,6 @@ function App() {
           <p className="auth-note">GitHub OAuth is not configured on this server.</p>
         ) : null}
 
-        {lastGithubSyncSummary ? (
-          <p className="auth-sync-meta">Last sync: {lastGithubSyncSummary}</p>
-        ) : null}
       </div>
 
       <div className="auth-panel-header">
@@ -4547,13 +4678,14 @@ function App() {
             autoCapitalize="off"
             onChange={(event) => {
               setDevinCreateAsUserId(event.target.value)
+              setHasVerifiedDevinConnection(false)
             }}
           />
         </label>
       </div>
 
-      {!(panelClassName === 'startup-auth-panel' && hasVerifiedDevinConnection) ? (
-        <div className={`auth-inline-grid ${hasVerifiedDevinConnection ? 'single-column' : ''}`.trim()}>
+      {!hasVerifiedDevinConnection ? (
+        <div className={`auth-inline-grid ${hasApiKey ? 'single-column' : ''}`.trim()}>
           <button
             type="button"
             className="fab-button secondary auth-verify-button"
@@ -4565,7 +4697,7 @@ function App() {
             {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={14} />}
             <span>Connect to Devin</span>
           </button>
-          {!hasVerifiedDevinConnection ? (
+          {!hasApiKey ? (
             <a
               href="https://app.devin.ai/login?prompt=empty"
               target="_blank"
@@ -4709,6 +4841,53 @@ function App() {
     </>
   )
 
+  const activityPanelViewTransition: Transition = prefersReducedMotion
+    ? {
+        type: 'tween',
+        duration: 0.08,
+        ease: 'easeOut',
+      }
+    : {
+        type: 'tween',
+        duration: 0.16,
+        ease: 'easeOut',
+      }
+  const activityPanelViewInitial = prefersReducedMotion
+    ? { opacity: 0 }
+    : { opacity: 0, y: 5 }
+  const activityPanelViewExit = prefersReducedMotion
+    ? { opacity: 0 }
+    : { opacity: 0, y: -4 }
+  const renderActivityPanelViewContent = (options?: { closeOnLinkClick?: boolean }) => (
+    <AnimatePresence mode="wait" initial={false}>
+      {activityPanelView === 'sessions' ? (
+        <motion.section
+          key="activity-panel-sessions"
+          className="jobs-drawer-section"
+          aria-label="Sessions"
+          initial={activityPanelViewInitial}
+          animate={{ opacity: 1, y: 0 }}
+          exit={activityPanelViewExit}
+          transition={activityPanelViewTransition}
+        >
+          {renderJobsSectionContent(options)}
+        </motion.section>
+      ) : (
+        <motion.section
+          key="activity-panel-actions"
+          className="jobs-drawer-section"
+          aria-label="Actions"
+          initial={activityPanelViewInitial}
+          animate={{ opacity: 1, y: 0 }}
+          exit={activityPanelViewExit}
+          transition={activityPanelViewTransition}
+        >
+          {renderRecentActionsSectionContent()}
+        </motion.section>
+      )}
+    </AnimatePresence>
+  )
+
   const renderActivityPanel = (panelClassName?: string) => (
     <section
       className={`auth-panel ${panelClassName ?? ''}`.trim()}
@@ -4738,15 +4917,7 @@ function App() {
         </div>
       </div>
       <div className="jobs-drawer-content desktop-activity-content activity-content-single">
-        {activityPanelView === 'sessions' ? (
-          <section className="jobs-drawer-section" aria-label="Sessions">
-            {renderJobsSectionContent()}
-          </section>
-        ) : (
-          <section className="jobs-drawer-section" aria-label="Actions">
-            {renderRecentActionsSectionContent()}
-          </section>
-        )}
+        {renderActivityPanelViewContent()}
       </div>
     </section>
   )
@@ -4818,6 +4989,18 @@ function App() {
                 <span className="jobs-count-badge">{runningJobsCount}</span>
               </button>
 
+              <button
+                type="button"
+                className="jobs-button settings-button"
+                onClick={() => {
+                  void handleSyncGithubFeed()
+                }}
+                disabled={isSyncingGithubFeed}
+                aria-label={isSyncingGithubFeed ? 'Refreshing issues and pull requests' : 'Refresh issues and pull requests'}
+              >
+                {isSyncingGithubFeed ? <span className="spinner" aria-hidden="true" /> : <RefreshCw size={14} />}
+              </button>
+
               {hasActiveGithubFeed ? (
                 <button
                   type="button"
@@ -4881,8 +5064,6 @@ function App() {
                   onClick={() => {
                     if (isDesktopWideLayout) {
                       setIsDesktopActivityOpen(false)
-                      setIsSettingsOpen(true)
-                      return
                     }
                     setIsSettingsOpen((previous) => !previous)
                   }}
@@ -5019,9 +5200,31 @@ function App() {
                   isDesktopLayout ? (
                     <div className="startup-desktop-welcome">
                       <div className="startup-desktop-logo">
-                        <span className="settings-app-name startup-desktop-logo-text">LYSIUM</span>
-                        <p className="startup-desktop-tagline">
-                          GitHub triage, powered by{' '}
+                        <motion.span
+                          key={`startup-desktop-title-${startupIntroCycle}`}
+                          className="settings-app-name startup-desktop-logo-text"
+                          initial={
+                            shouldPlayStartupIntro
+                              ? { opacity: 0, y: 8, scale: 0.97 }
+                              : false
+                          }
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={getStartupIntroTransition(0.08)}
+                        >
+                          LYSIUM
+                        </motion.span>
+                        <motion.p
+                          key={`startup-desktop-tagline-${startupIntroCycle}`}
+                          className="startup-desktop-tagline"
+                          initial={
+                            shouldPlayStartupIntro
+                              ? { opacity: 0, y: 7 }
+                              : false
+                          }
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={getStartupIntroTransition(0.2)}
+                        >
+                          Agent-first command layer, powered by{' '}
                           <a
                             href="https://devin.ai/"
                             target="_blank"
@@ -5030,40 +5233,82 @@ function App() {
                           >
                             Devin
                           </a>
-                        </p>
+                        </motion.p>
                       </div>
-                      <div className="startup-desktop-panel">
+                      <motion.div
+                        key={`startup-desktop-panel-${startupIntroCycle}`}
+                        className="startup-desktop-panel"
+                        initial={
+                          shouldPlayStartupIntro
+                            ? { opacity: 0, y: 16, scale: 0.985 }
+                            : false
+                        }
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={getStartupIntroTransition(0.32)}
+                      >
                         {showStartupLoadingState
                           ? renderStartupLoadingState()
                           : shouldShowCredentialSetup
                             ? renderAuthPanel('startup-auth-panel')
                             : null}
-                      </div>
+                      </motion.div>
                     </div>
                   ) : (
                     <section className="startup-shell deck-shell">
                       <div className="startup-mobile-welcome">
                         <div className="startup-desktop-logo">
-                          <span className="settings-app-name startup-mobile-logo-text">LYSIUM</span>
-                          <p className="startup-desktop-tagline">
-                          GitHub triage, powered by{' '}
-                          <a
-                            href="https://devin.ai/"
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="startup-tagline-link"
+                          <motion.span
+                            key={`startup-mobile-title-${startupIntroCycle}`}
+                            className="settings-app-name startup-mobile-logo-text"
+                            initial={
+                              shouldPlayStartupIntro
+                                ? { opacity: 0, y: 8, scale: 0.97 }
+                                : false
+                            }
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={getStartupIntroTransition(0.08)}
                           >
-                            Devin
-                          </a>
-                        </p>
+                            LYSIUM
+                          </motion.span>
+                          <motion.p
+                            key={`startup-mobile-tagline-${startupIntroCycle}`}
+                            className="startup-desktop-tagline"
+                            initial={
+                              shouldPlayStartupIntro
+                                ? { opacity: 0, y: 7 }
+                                : false
+                            }
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={getStartupIntroTransition(0.2)}
+                          >
+                            Agent-first command layer, powered by{' '}
+                            <a
+                              href="https://devin.ai/"
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="startup-tagline-link"
+                            >
+                              Devin
+                            </a>
+                          </motion.p>
                         </div>
-                        <div className="startup-mobile-panel">
+                        <motion.div
+                          key={`startup-mobile-panel-${startupIntroCycle}`}
+                          className="startup-mobile-panel"
+                          initial={
+                            shouldPlayStartupIntro
+                              ? { opacity: 0, y: 16, scale: 0.985 }
+                              : false
+                          }
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={getStartupIntroTransition(0.32)}
+                        >
                           {showStartupLoadingState
                             ? renderStartupLoadingState()
                             : shouldShowCredentialSetup
                               ? renderAuthPanel('startup-auth-panel')
                               : null}
-                        </div>
+                        </motion.div>
                       </div>
                     </section>
                   )
@@ -5113,6 +5358,43 @@ function App() {
                       : ['Loading pull request code from GitHub...']
                     : card.summary
                   const markdownBlocks = buildCardMarkdownBlocks(cardBodyLines)
+                  const renderMarkdownBlocks = () =>
+                    markdownBlocks.map((block, blockIndex) => {
+                      if (block.kind === 'code') {
+                        const codeTokens = highlightCodeTokens(block.content, block.language)
+
+                        return (
+                          <pre
+                            key={`${card.kind}-${card.id}-md-${blockIndex}`}
+                            className="code-snippet"
+                          >
+                            <code>
+                              {codeTokens.map((token, tokenIndex) => (
+                                <span
+                                  key={`${card.kind}-${card.id}-md-${blockIndex}-token-${tokenIndex}`}
+                                  className={
+                                    token.tone === 'plain'
+                                      ? undefined
+                                      : `code-token ${token.tone}`
+                                  }
+                                >
+                                  {token.value}
+                                </span>
+                              ))}
+                            </code>
+                          </pre>
+                        )
+                      }
+
+                      return (
+                        <p
+                          key={`${card.kind}-${card.id}-md-${blockIndex}`}
+                          className={`summary-line ${block.kind === 'heading' ? 'is-heading' : ''} ${block.kind === 'bullet' ? 'is-bullet' : ''}`.trim()}
+                        >
+                          {block.content}
+                        </p>
+                      )
+                    })
                   const topCardIsMoving =
                     isAnimatingOut ||
                     isDragging ||
@@ -5279,42 +5561,22 @@ function App() {
                       <div
                         className={`card-scroll-content ${card.kind === 'issue' ? 'issue-scroll-content' : ''}`.trim()}
                       >
-                        {markdownBlocks.map((block, blockIndex) => {
-                          if (block.kind === 'code') {
-                            const codeTokens = highlightCodeTokens(block.content, block.language)
-
-                            return (
-                              <pre
-                                key={`${card.kind}-${card.id}-md-${blockIndex}`}
-                                className="code-snippet"
-                              >
-                                <code>
-                                  {codeTokens.map((token, tokenIndex) => (
-                                    <span
-                                      key={`${card.kind}-${card.id}-md-${blockIndex}-token-${tokenIndex}`}
-                                      className={
-                                        token.tone === 'plain'
-                                          ? undefined
-                                          : `code-token ${token.tone}`
-                                      }
-                                    >
-                                      {token.value}
-                                    </span>
-                                  ))}
-                                </code>
-                              </pre>
-                            )
-                          }
-
-                          return (
-                            <p
-                              key={`${card.kind}-${card.id}-md-${blockIndex}`}
-                              className={`summary-line ${block.kind === 'heading' ? 'is-heading' : ''} ${block.kind === 'bullet' ? 'is-bullet' : ''}`.trim()}
+                        {card.kind === 'pullRequest' && isTopCard ? (
+                          <AnimatePresence mode="wait" initial={false}>
+                            <motion.div
+                              key={`pull-request-content-${card.id}-${pullRequestContentView}`}
+                              className="card-content-view"
+                              initial={pullRequestViewInitial}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={pullRequestViewExit}
+                              transition={pullRequestViewTransition}
                             >
-                              {block.content}
-                            </p>
-                          )
-                        })}
+                              {renderMarkdownBlocks()}
+                            </motion.div>
+                          </AnimatePresence>
+                        ) : (
+                          renderMarkdownBlocks()
+                        )}
                       </div>
                     </motion.article>
                   )
@@ -5460,17 +5722,33 @@ function App() {
           </div>
 
           {showDesktopRightRail ? (
-            <aside
-              className={`desktop-side-rail ${showDesktopSettingsPanel ? 'settings-open' : 'activity-only'}`.trim()}
-              aria-label="Desktop side panel"
-            >
-              {showDesktopSettingsPanel ? (
-                <>
-                  {renderThemeToggleSection('desktop-theme-toggle')}
-                  {renderAuthPanel('desktop-settings-panel')}
-                </>
-              ) : null}
-              {showDesktopActivityRail ? renderActivityPanel('desktop-activity-panel') : null}
+            <aside className="desktop-side-rail" aria-label="Desktop side panel">
+              <AnimatePresence mode="wait" initial={false}>
+                {showDesktopSettingsPanel ? (
+                  <motion.div
+                    key="desktop-side-rail-settings"
+                    className="desktop-side-rail-view settings-view"
+                    initial={desktopRailViewInitial}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={desktopRailViewExit}
+                    transition={desktopRailViewTransition}
+                  >
+                    {renderThemeToggleSection('desktop-theme-toggle')}
+                    {renderAuthPanel('desktop-settings-panel')}
+                  </motion.div>
+                ) : showDesktopActivityRail ? (
+                  <motion.div
+                    key="desktop-side-rail-activity"
+                    className="desktop-side-rail-view activity-view"
+                    initial={desktopRailViewInitial}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={desktopRailViewExit}
+                    transition={desktopRailViewTransition}
+                  >
+                    {renderActivityPanel('desktop-activity-panel')}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </aside>
           ) : null}
         </div>
@@ -5673,27 +5951,7 @@ function App() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={getDrawerContentTransition(0.07)}
               >
-                {activityPanelView === 'sessions' ? (
-                  <motion.section
-                    className="jobs-drawer-section"
-                    aria-label="Sessions"
-                    initial={drawerContentInitial}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={getDrawerContentTransition(0.11)}
-                  >
-                    {renderJobsSectionContent({ closeOnLinkClick: true })}
-                  </motion.section>
-                ) : (
-                  <motion.section
-                    className="jobs-drawer-section"
-                    aria-label="Actions"
-                    initial={drawerContentInitial}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={getDrawerContentTransition(0.11)}
-                  >
-                    {renderRecentActionsSectionContent()}
-                  </motion.section>
-                )}
+                {renderActivityPanelViewContent({ closeOnLinkClick: true })}
               </motion.div>
             </motion.aside>
           </motion.div>

@@ -46,7 +46,7 @@
 }
 
 /* Light theme: jobs button hover */
-[data-theme="light"] .jobs-button:hover {
+[data-theme="light"] .jobs-button:hover:not(:disabled) {
   color: #333;
   border-color: rgba(180, 180, 180, 0.86);
   background: rgba(240, 240, 240, 0.76);
@@ -402,7 +402,7 @@
   box-shadow: 0 1px 2px rgba(82, 123, 146, 0.14);
 }
 
-[data-theme="aurora-legacy"] .jobs-button:hover {
+[data-theme="aurora-legacy"] .jobs-button:hover:not(:disabled) {
   color: #264357;
   border-color: rgba(130, 200, 228, 0.66);
   background: rgba(137, 208, 239, 0.2);
@@ -860,10 +860,15 @@
     transform 120ms ease;
 }
 
-.jobs-button:hover {
+.jobs-button:hover:not(:disabled) {
   color: #ececec;
   border-color: rgba(88, 88, 88, 0.86);
   background: rgba(20, 20, 20, 0.76);
+}
+
+.jobs-button:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
 }
 
 .jobs-button.is-active {
@@ -882,6 +887,11 @@
   align-items: center;
   justify-content: center;
   gap: 0.34rem;
+}
+
+.top-utility-actions .settings-button {
+  min-width: 40px;
+  padding-inline: 0.5rem;
 }
 
 .jobs-count-badge {
@@ -999,12 +1009,14 @@
   flex-direction: column;
   padding: 0;
   gap: 0.65rem;
+  will-change: transform, opacity;
 }
 
 .startup-skeleton-frame {
   flex: 1;
   min-height: 0;
   position: relative;
+  will-change: transform, opacity;
 }
 
 .startup-skeleton-frame::before,
@@ -1838,6 +1850,13 @@
   flex: 0 1 auto;
 }
 
+.card-content-view {
+  display: grid;
+  gap: 0.42rem;
+  min-height: 0;
+  will-change: transform, opacity;
+}
+
 .summary-line {
   margin: 0;
   color: var(--text-muted);
@@ -2014,6 +2033,21 @@
 .settings-github-link:hover {
   opacity: 1;
   color: var(--text-primary);
+}
+
+.desktop-side-rail-view {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.desktop-side-rail-view.settings-view {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.desktop-side-rail-view.activity-view {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .desktop-settings-panel,
@@ -2519,7 +2553,7 @@
 
 @media (hover: hover) {
   .top-toggle button:hover,
-  .jobs-button:hover,
+  .jobs-button:hover:not(:disabled),
   .theme-option:hover,
   .jobs-close:hover,
   .job-item:hover {
@@ -2712,7 +2746,7 @@
   background: rgba(252, 252, 252, 0.94);
 }
 
-[data-theme="aurora-legacy"] .jobs-button:hover {
+[data-theme="aurora-legacy"] .jobs-button:hover:not(:disabled) {
   color: #3f5b6d;
   border-color: rgba(130, 200, 228, 0.4);
   background: rgba(130, 200, 228, 0.08);
@@ -2888,7 +2922,7 @@
   border-color: rgba(203, 203, 203, 0.26);
 }
 
-[data-theme="aurora"] .jobs-button:hover,
+[data-theme="aurora"] .jobs-button:hover:not(:disabled),
 [data-theme="aurora"] .jobs-close:hover,
 [data-theme="aurora"] .job-item:hover {
   background: #1b1b1d;
@@ -3174,8 +3208,6 @@
     opacity: 1;
   }
 
-
-
   .startup-desktop-panel {
     width: 100%;
     max-width: 480px;
@@ -3306,10 +3338,6 @@
     grid-template-rows: minmax(0, 1fr);
   }
 
-  .desktop-side-rail.settings-open {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
   .desktop-theme-toggle {
     margin-bottom: 0;
   }
@@ -3394,7 +3422,7 @@
 
   .fab-button:active:not(:disabled),
   .top-toggle button:hover,
-  .jobs-button:hover,
+  .jobs-button:hover:not(:disabled),
   .theme-option:hover,
   .jobs-close:hover,
   .job-item:hover {
