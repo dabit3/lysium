@@ -1352,6 +1352,7 @@ function App() {
   const [isLoadingDevinSession, setIsLoadingDevinSession] = useState(true)
   const [hasDevinSession, setHasDevinSession] = useState(false)
   const [hasGithubOauthSession, setHasGithubOauthSession] = useState(false)
+  const [isCheckingGithubOauthSession, setIsCheckingGithubOauthSession] = useState(true)
   const [githubOauthLogin, setGithubOauthLogin] = useState<string | null>(null)
   const [isDisconnectingGithubOauthSession, setIsDisconnectingGithubOauthSession] =
     useState(false)
@@ -1521,7 +1522,7 @@ function App() {
     HAS_GITHUB_OAUTH_CONFIG &&
     hasGithubOauthSession &&
     hasGithubScope
-  const showStartupLoadingState = !hasActiveGithubFeed && isSyncingGithubFeed
+  const showStartupLoadingState = !hasActiveGithubFeed && (isSyncingGithubFeed || isCheckingGithubOauthSession || isLoadingDevinSession)
   const shouldShowCredentialSetup = !hasActiveGithubFeed && !showStartupLoadingState
 
   const showToast = (message: string, onUndo?: () => void, timeoutMs?: number) => {
@@ -3764,7 +3765,9 @@ function App() {
   }, [hasDevinSession, hasDevinOrgId, hasGithubOauthSession, hasGithubScope])
 
   useEffect(() => {
-    void refreshGithubOauthSessionToken({ silent: true })
+    refreshGithubOauthSessionToken({ silent: true }).finally(() =>
+      setIsCheckingGithubOauthSession(false),
+    )
 
     fetch(DEVIN_SESSION_URL)
       .then((res) => (res.ok ? res.json() : null))
