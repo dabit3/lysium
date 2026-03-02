@@ -4484,7 +4484,7 @@ function App() {
         >
           <p className="repo-request-meta">
             {selectedRepo === DEVINS_MACHINE_REPO_LABEL ? (
-              <span>Using Devin's machine context</span>
+              <span>Using Devin's machine</span>
             ) : (
               <>
                 Target repository: <span>{selectedRepo || 'Select a repository'}</span>
