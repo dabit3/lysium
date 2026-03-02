@@ -1522,21 +1522,22 @@
   inset: 0;
   border-radius: inherit;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   padding: var(--space-5);
 }
 
 .swipe-overlay.right {
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .swipe-overlay.left {
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .swipe-overlay.down {
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .swipe-overlay.tone-neutral {
