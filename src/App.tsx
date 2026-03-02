@@ -3472,9 +3472,16 @@ function App() {
   }
 
   const handleOpenCommentModal = () => {
-    if (!activePr) {
-      showToast('No pull requests left to comment on.')
-      return
+    if (activeTab === 'issues') {
+      if (!activeIssue) {
+        showToast('No issues left to comment on.')
+        return
+      }
+    } else {
+      if (!activePr) {
+        showToast('No pull requests left to comment on.')
+        return
+      }
     }
 
     setIsCommentModalOpen(true)
@@ -3496,33 +3503,35 @@ function App() {
   }
 
   const handleSubmitComment = async () => {
-    const pr = activePr
     if (!commentBody.trim()) {
       showToast('Write a short comment before submitting.')
       return
     }
 
-    if (!pr) {
-      showToast('No pull request available for comment.')
+    const isIssueComment = activeTab === 'issues'
+    const target = isIssueComment ? activeIssue : activePr
+    if (!target) {
+      showToast(isIssueComment ? 'No issue available for comment.' : 'No pull request available for comment.')
       return
     }
 
+    const kind = isIssueComment ? 'issue' : 'PR'
     const commentText = commentBody.trim()
     setIsPostingComment(true)
     setIsCommentModalOpen(false)
     setCommentBody('')
-    const actionId = addAction(`Post manual comment on PR #${pr.id}`, 'pending')
-    const jobId = addJob('Post Comment', `${pr.repo} #${pr.id}`, {
+    const actionId = addAction(`Post manual comment on ${kind} #${target.id}`, 'pending')
+    const jobId = addJob('Post Comment', `${target.repo} #${target.id}`, {
       retryable: true,
       retryPrompt: commentText,
     })
     showToast('Posting comment...')
 
     try {
-      await postGithubPullRequestComment(pr.repo, pr.id, commentText)
+      await postGithubPullRequestComment(target.repo, target.id, commentText)
       updateJob(jobId, {
         status: 'success',
-        message: `Comment posted on PR #${pr.id}.`,
+        message: `Comment posted on ${kind} #${target.id}.`,
         retryable: false,
         retryPrompt: undefined,
       })
@@ -5124,26 +5133,36 @@ opens a PR.
                     <span>{desktopDownSwipeAction?.label ?? 'Skip'}</span>
                   </button>
                   {activeTab === 'issues' ? (
-                    isActiveIssueAssessed && activeIssueAssessmentSessionUrl ? (
-                      <a
-                        className="fab-button assess-button assessed-session-link pr-assess-action desktop-swipe-button"
-                        href={activeIssueAssessmentSessionUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                      >
-                        <DevinLogo size={16} /> <span>Assessment</span>
-                      </a>
-                    ) : (
+                    <>
+                      {isActiveIssueAssessed && activeIssueAssessmentSessionUrl ? (
+                        <a
+                          className="fab-button assess-button assessed-session-link pr-assess-action desktop-swipe-button"
+                          href={activeIssueAssessmentSessionUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          <DevinLogo size={16} /> <span>Assessment</span>
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="fab-button assess-button pr-assess-action desktop-swipe-button"
+                          onClick={() => void handleAssessNecessity()}
+                          disabled={isAssessingIssue || isActiveIssueAssessed}
+                        >
+                          {isAssessingIssue ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={16} />}
+                          <span>{isActiveIssueAssessed ? 'Already Assessed' : 'Assess'}</span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        className="fab-button assess-button pr-assess-action desktop-swipe-button"
-                        onClick={() => void handleAssessNecessity()}
-                        disabled={isAssessingIssue || isActiveIssueAssessed}
+                        className="fab-button secondary desktop-swipe-button"
+                        onClick={handleOpenCommentModal}
                       >
-                        {isAssessingIssue ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={16} />}
-                        <span>{isActiveIssueAssessed ? 'Already Assessed' : 'Assess'}</span>
+                        <MessageSquarePlus size={16} />
+                        <span>Comment</span>
                       </button>
-                    )
+                    </>
                   ) : null}
                   {activeTab === 'pullRequests' && !isActivePullRequestInMergeConflict && !isActivePullRequestConflictResolved ? (
                     <>
@@ -5640,6 +5659,13 @@ opens a PR.
                     <span>{isActiveIssueAssessed ? 'Already Assessed' : 'Assess'}</span>
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="fab-button secondary"
+                  onClick={handleOpenCommentModal}
+                >
+                  <MessageSquarePlus size={16} /> Comment
+                </button>
               </div>
             ) : (
               <div
@@ -5795,7 +5821,7 @@ opens a PR.
               className="comment-modal"
               role="dialog"
               aria-modal="true"
-              aria-label="Leave pull request comment"
+              aria-label={activeTab === 'issues' ? 'Leave issue comment' : 'Leave pull request comment'}
               onClick={(event) => event.stopPropagation()}
               initial={commentModalInitial}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -5804,7 +5830,9 @@ opens a PR.
             >
               <h3>Leave Comment</h3>
               <p className="modal-caption">
-                PR #{activePr?.id ?? '—'} • {activePr?.repo ?? 'No active PR'}
+                {activeTab === 'issues'
+                  ? `Issue #${activeIssue?.id ?? '—'} • ${activeIssue?.repo ?? 'No active issue'}`
+                  : `PR #${activePr?.id ?? '—'} • ${activePr?.repo ?? 'No active PR'}`}
               </p>
 
               <textarea
