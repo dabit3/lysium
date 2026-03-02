@@ -3084,12 +3084,12 @@ function App() {
           'Keep scope focused, add or update tests when appropriate, and summarize any risks.',
           'Return the PR URL, change summary, and verification steps.',
         ].join('\n\n')
-    const actionId = addAction(`Create repo PR in ${targetLabel}`, 'pending')
-    const jobId = addJob('Repo PR request', targetLabel, {
+    const actionId = addAction(`Start implementation request in ${targetLabel}`, 'pending')
+    const jobId = addJob('Implementation Request', targetLabel, {
       retryable: true,
       retryPrompt: prompt,
     })
-    showToast(`Starting Devin on ${targetLabel}...`)
+    showToast(`Starting implementation request on ${targetLabel}...`)
 
     try {
       const repoTag = isDevinsMachineTarget
@@ -3099,8 +3099,8 @@ function App() {
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '')
       const session = await createDevinSession(prompt, {
-        title: `Repo request: ${targetLabel}`,
-        tags: ['repo-pr-request', repoTag].filter((tag) => tag.length > 0),
+        title: `Implementation Request: ${targetLabel}`,
+        tags: ['implementation-request', repoTag].filter((tag) => tag.length > 0),
         structuredOutputSchema: {
           type: 'object',
           properties: {
@@ -3116,7 +3116,7 @@ function App() {
 
       updateJob(jobId, {
         status: 'success',
-        message: `Repo PR request started. ${formatSessionReference(session)}`,
+        message: `Implementation Request started. ${formatSessionReference(session)}`,
         retryable: false,
         retryPrompt: undefined,
         sessionUrl,
@@ -3132,11 +3132,11 @@ function App() {
         error instanceof Error ? error.message : 'Unable to create Devin session.'
       updateJob(jobId, {
         status: 'failed',
-        message: `Repo PR request failed: ${message}`,
+        message: `Implementation Request failed: ${message}`,
         retryable: true,
       })
       updateAction(actionId, { outcome: 'failed' })
-      showToast('Repo PR request failed. Open Activity to retry.')
+      showToast('Implementation Request failed. Open Activity to retry.')
     } finally {
       setIsCreatingRepoRequest(false)
     }

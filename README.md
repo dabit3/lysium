@@ -15,6 +15,14 @@ An elegant and cross-platform control plane for agent-first software delivery.
 
 ![Lysium](banner.png)
 
+### Mobile
+
+![Lysium Mobile](mobile.png)
+
+### Desktop
+
+![Lysium Desktop](desktop.png)
+
 ---
 
 ## How credentials work
