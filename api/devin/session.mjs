@@ -5,9 +5,11 @@ import {
   buildCookie,
   clearCookie,
 } from '../_cookie.mjs'
+import { checkRateLimit } from '../_rate-limit.mjs'
 
 const SESSION_COOKIE_NAME = 'elysium_devin_session'
 const SESSION_TTL_SECONDS = 43200 // 12 hours
+const MAX_BODY_BYTES = 10 * 1024 // 10 KB
 
 const getSession = (req) => {
   const cookies = parseCookies(req.headers.cookie)
@@ -20,7 +22,16 @@ const getSession = (req) => {
 const readBody = (req) =>
   new Promise((resolve, reject) => {
     let data = ''
-    req.on('data', (chunk) => { data += chunk })
+    let size = 0
+    req.on('data', (chunk) => {
+      size += chunk.length
+      if (size > MAX_BODY_BYTES) {
+        req.destroy()
+        reject(new Error('Body too large'))
+        return
+      }
+      data += chunk
+    })
     req.on('end', () => {
       try { resolve(JSON.parse(data)) } catch { reject(new Error('Invalid JSON')) }
     })
@@ -28,6 +39,13 @@ const readBody = (req) =>
   })
 
 export default async function handler(req, res) {
+  const limited = checkRateLimit(req, { windowMs: 60_000, max: 30 })
+  if (limited) {
+    res.setHeader('Retry-After', Math.ceil(limited.retryAfterMs / 1000))
+    res.status(429).json({ error: 'Too many requests.' })
+    return
+  }
+
   const method = req.method
 
   // GET — return current session info (no secrets exposed)
@@ -47,9 +65,21 @@ export default async function handler(req, res) {
 
   // POST — save credentials into a signed HttpOnly cookie
   if (method === 'POST') {
+    const ct = (req.headers['content-type'] ?? '').toLowerCase()
+    if (!ct.includes('application/json')) {
+      res.status(415).json({ error: 'Content-Type must be application/json.' })
+      return
+    }
+
     let body
-    try { body = await readBody(req) } catch {
-      res.status(400).json({ error: 'Invalid request body.' })
+    try {
+      body = await readBody(req)
+    } catch (err) {
+      if (err.message === 'Body too large') {
+        res.status(413).json({ error: 'Request body too large.' })
+      } else {
+        res.status(400).json({ error: 'Invalid request body.' })
+      }
       return
     }
 

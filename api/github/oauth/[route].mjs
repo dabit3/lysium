@@ -6,6 +6,7 @@ import {
   buildCookie,
   clearCookie,
 } from '../../_cookie.mjs'
+import { checkRateLimit } from '../../_rate-limit.mjs'
 
 const readEnv = (key, fallback = '') => {
   const value = process.env[key]
@@ -65,6 +66,13 @@ const fetchUserInfo = async (token) => {
 }
 
 export default async function handler(req, res) {
+  const limited = checkRateLimit(req, { windowMs: 60_000, max: 30 })
+  if (limited) {
+    res.setHeader('Retry-After', Math.ceil(limited.retryAfterMs / 1000))
+    res.status(429).json({ error: 'Too many requests.' })
+    return
+  }
+
   const url = new URL(req.url, `https://${req.headers.host}`)
   const route = url.pathname.replace(/^\/api\/github\/oauth\/?/, '') || ''
   const method = req.method
@@ -90,7 +98,7 @@ export default async function handler(req, res) {
     authUrl.searchParams.set('redirect_uri', redirectUri)
     authUrl.searchParams.set('scope', 'repo')
     authUrl.searchParams.set('state', state)
-    res.setHeader('Set-Cookie', buildCookie(STATE_COOKIE_NAME, state, STATE_TTL_SECONDS))
+    res.setHeader('Set-Cookie', buildCookie(STATE_COOKIE_NAME, buildSignedValue({ state }), STATE_TTL_SECONDS))
     res.redirect(302, authUrl.toString())
     return
   }
@@ -110,7 +118,8 @@ export default async function handler(req, res) {
     const code = url.searchParams.get('code')
     const state = url.searchParams.get('state')
     const cookies = parseCookies(req.headers.cookie)
-    const expectedState = cookies[STATE_COOKIE_NAME]
+    const stateCookie = parseSignedValue(cookies[STATE_COOKIE_NAME])
+    const expectedState = stateCookie?.state
     if (!code || !state || !expectedState || state !== expectedState) {
       res.setHeader('Set-Cookie', clearCookie(STATE_COOKIE_NAME))
       res.redirect(302, successUrl('invalid_oauth_state'))
