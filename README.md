@@ -1,6 +1,6 @@
 # Lysium
 
-An elegant and cross-platform control plane for agent-first software delivery.
+An elegant cross-platform control plane for agent-first software delivery.
 
 ## Features
 
