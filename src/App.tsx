@@ -3509,6 +3509,8 @@ function App() {
 
     const commentText = commentBody.trim()
     setIsPostingComment(true)
+    setIsCommentModalOpen(false)
+    setCommentBody('')
     const actionId = addAction(`Post manual comment on PR #${pr.id}`, 'pending')
     const jobId = addJob('Post Comment', `${pr.repo} #${pr.id}`, {
       retryable: true,
@@ -3525,8 +3527,6 @@ function App() {
         retryPrompt: undefined,
       })
       updateAction(actionId, { outcome: 'success' })
-      setIsCommentModalOpen(false)
-      setCommentBody('')
     } catch (error) {
       const message =
         error instanceof Error
