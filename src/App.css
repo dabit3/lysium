@@ -1522,7 +1522,7 @@
   inset: 0;
   border-radius: inherit;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: var(--space-5);
 }
@@ -1537,7 +1537,7 @@
 
 .swipe-overlay.down {
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .swipe-overlay.tone-neutral {
