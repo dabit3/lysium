@@ -4836,19 +4836,19 @@ function App() {
                 >
                   {desktopPullRequestCountLabel}
                 </button>
-                <button
-                  type="button"
-                  className={`desktop-nav-button ${isDesktopWideLayout ? (showDesktopActivityRail ? 'is-active' : '') : (showDesktopMainActivity ? 'is-active' : '')}`.trim()}
-                  onClick={() => {
-                    if (!isDesktopWideLayout) {
+                {!isDesktopWideLayout ? (
+                  <button
+                    type="button"
+                    className={`desktop-nav-button ${showDesktopMainActivity ? 'is-active' : ''}`.trim()}
+                    onClick={() => {
                       setIsDesktopActivityOpen(true)
-                    }
-                    setIsSettingsOpen(false)
-                  }}
-                >
-                  Activity
-                  <span className="jobs-count-badge">{runningJobsCount}</span>
-                </button>
+                      setIsSettingsOpen(false)
+                    }}
+                  >
+                    Activity
+                    <span className="jobs-count-badge">{runningJobsCount}</span>
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className={`desktop-nav-button ${isSettingsOpen ? 'is-active' : ''}`.trim()}
