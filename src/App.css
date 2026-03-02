@@ -946,7 +946,11 @@
   width: 100%;
 }
 
-.startup-mobile-panel .startup-loading-panel,
+.startup-mobile-panel .startup-loading-panel {
+  min-height: 380px;
+  margin-top: 10px;
+}
+
 .startup-desktop-panel .startup-loading-panel {
   min-height: 380px;
 }
@@ -1164,6 +1168,21 @@
 
 .oauth-actions-grid {
   grid-template-columns: 1fr;
+}
+
+.auth-clear-row {
+  grid-template-columns: 1fr;
+}
+
+.auth-clear-row .fab-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.auth-danger-zone {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
 }
 
 .auth-reset-row {

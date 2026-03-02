@@ -236,16 +236,13 @@ const ASSESSED_PRS_STORAGE_KEY = 'minion.assessed_prs.v1'
 const GITHUB_SCOPE_STORAGE_KEY = 'minion.github_scope.v1'
 const DEVINS_MACHINE_REPO_LABEL = "Devin's machine"
 const JOBS_STORAGE_KEY = 'minion.jobs.v1'
-const JOBS_RETENTION_MS = 1000 * 60 * 60 * 24 * 7
 
 const loadPersistedJobs = (): JobEntry[] => {
   try {
     const raw = window.localStorage.getItem(JOBS_STORAGE_KEY)
     if (!raw) return []
-    const parsed = JSON.parse(raw) as JobEntry[]
-    const cutoff = Date.now() - JOBS_RETENTION_MS
-    return parsed
-      .filter((job) => job.status !== 'running' && job.createdAt > cutoff)
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as JobEntry[]) : []
   } catch {
     return []
   }
@@ -253,8 +250,7 @@ const loadPersistedJobs = (): JobEntry[] => {
 
 const savePersistedJobs = (jobs: JobEntry[]) => {
   try {
-    const toSave = jobs.filter((job) => job.status !== 'running')
-    window.localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(toSave))
+    window.localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(jobs))
   } catch {}
 }
 const DevinLogo = ({ size = 16 }: { size?: number }) => (
@@ -1522,7 +1518,21 @@ function App() {
     HAS_GITHUB_OAUTH_CONFIG &&
     hasGithubOauthSession &&
     hasGithubScope
-  const showStartupLoadingState = !hasActiveGithubFeed && (isSyncingGithubFeed || isCheckingGithubOauthSession || isLoadingDevinSession)
+  const shouldAutoSyncStartup =
+    !hasActiveGithubFeed &&
+    !hasAttemptedStartupSyncRef.current &&
+    !isLoadingDevinSession &&
+    !isCheckingGithubOauthSession &&
+    hasDevinSession &&
+    hasDevinOrgId &&
+    hasGithubOauthSession &&
+    hasGithubScope
+  const showStartupLoadingState =
+    !hasActiveGithubFeed &&
+    (isSyncingGithubFeed ||
+      isCheckingGithubOauthSession ||
+      isLoadingDevinSession ||
+      shouldAutoSyncStartup)
   const shouldShowCredentialSetup = !hasActiveGithubFeed && !showStartupLoadingState
 
   const showToast = (message: string, onUndo?: () => void, timeoutMs?: number) => {
@@ -1685,7 +1695,7 @@ function App() {
           createdAt: Date.now(),
         },
         ...previous,
-      ].slice(0, 24),
+      ],
     )
 
     return jobId
@@ -2314,19 +2324,27 @@ function App() {
     }
 
     const isAutoTriggered = options?.autoTriggered === true
+    if (isAutoTriggered) {
+      setIsSyncingGithubFeed(true)
+      setLastGithubSyncSummary(null)
+    }
+
     const githubAccessToken = await resolveGithubAccessToken({ silent: true })
     const authIssue = getGithubFeedAuthIssue(githubAccessToken)
     if (authIssue) {
       if (!isAutoTriggered) {
         showToast(authIssue)
+      } else {
+        setIsSyncingGithubFeed(false)
       }
       return
     }
 
-    setIsSyncingGithubFeed(true)
-    setLastGithubSyncSummary(null)
+    if (!isAutoTriggered) {
+      setIsSyncingGithubFeed(true)
+      setLastGithubSyncSummary(null)
+    }
     const actionId = addAction('Sync GitHub triage feed', 'pending')
-    const jobId = addJob('Sync GitHub feed', 'GitHub Search API (issues + pull requests)')
 
     if (!isAutoTriggered) {
       showToast('Syncing GitHub issues and pull requests from GitHub Search API...')
@@ -2362,11 +2380,6 @@ function App() {
         setIsSettingsOpen(false)
       }
 
-      updateJob(jobId, {
-        status: 'success',
-        message: `GitHub feed synced directly from GitHub Search API. ${summary}.`,
-        retryable: false,
-      })
       updateAction(actionId, { outcome: 'success' })
 
 
@@ -2374,11 +2387,6 @@ function App() {
       const message =
         error instanceof Error ? error.message : 'Unable to sync GitHub feed.'
       setLastGithubSyncSummary(`Sync failed: ${message}`)
-      updateJob(jobId, {
-        status: 'failed',
-        message: `GitHub feed sync failed: ${message}`,
-        retryable: false,
-      })
       updateAction(actionId, { outcome: 'failed' })
       if (!isAutoTriggered) {
         showToast(`GitHub sync failed: ${message}`)
@@ -2409,7 +2417,6 @@ function App() {
 
     setIsVerifyingDevinConnection(true)
     const actionId = addAction('Verify Devin API key', 'pending')
-    const jobId = addJob('Verify auth', 'Devin API /organizations/sessions')
 
     try {
       // Save credentials to server session (apiKey omitted if not re-entered — server keeps existing)
@@ -2438,21 +2445,11 @@ function App() {
         throw new Error(await parseDevinError(response))
       }
 
-      updateJob(jobId, {
-        status: 'success',
-        message: 'API key verified. Devin session endpoints are reachable.',
-        retryable: false,
-      })
       updateAction(actionId, { outcome: 'success' })
       setHasVerifiedDevinConnection(true)
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to reach Devin API.'
-      updateJob(jobId, {
-        status: 'failed',
-        message: `Verification failed: ${message}`,
-        retryable: false,
-      })
       updateAction(actionId, { outcome: 'failed' })
       setHasVerifiedDevinConnection(false)
       showToast(`Devin auth failed: ${message}`)
@@ -3595,11 +3592,42 @@ function App() {
     }
   }
 
+  const clearLocalAppData = (options?: { showToast?: boolean }) => {
+    const shouldShowToast = options?.showToast ?? true
+    setAssessedIssueLookup({})
+    setAssessedPrLookup({})
+    setJobs([])
+    setGithubSearchScope('')
+
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    try {
+      const keys = Object.keys(window.localStorage).filter((key) =>
+        key.startsWith('minion.'),
+      )
+      keys.forEach((key) => window.localStorage.removeItem(key))
+      if (shouldShowToast) {
+        showToast(
+          keys.length > 0
+            ? `Cleared ${keys.length} local storage ${keys.length === 1 ? 'key' : 'keys'}.`
+            : 'No local storage keys to clear.',
+        )
+      }
+    } catch {
+      if (shouldShowToast) {
+        showToast('Unable to clear local storage.')
+      }
+    }
+  }
+
   const handleClearSession = async () => {
     if (isClearingSession) {
       return
     }
 
+    setIsSettingsOpen(false)
     setIsClearingSession(true)
 
     try {
@@ -3637,37 +3665,14 @@ function App() {
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
       resetSyncedGithubFeedState()
-      showToast('Session cleared.')
+      clearLocalAppData({ showToast: false })
+      showToast('Session and local data cleared.')
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to clear active session.'
       showToast(`Session clear failed: ${message}`)
     } finally {
       setIsClearingSession(false)
-    }
-  }
-
-  const handleClearLocalStorage = () => {
-    setAssessedIssueLookup({})
-    setAssessedPrLookup({})
-    setJobs([])
-
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    try {
-      const keys = Object.keys(window.localStorage).filter((key) =>
-        key.startsWith('minion.'),
-      )
-      keys.forEach((key) => window.localStorage.removeItem(key))
-      showToast(
-        keys.length > 0
-          ? `Cleared ${keys.length} local storage ${keys.length === 1 ? 'key' : 'keys'}.`
-          : 'No local storage keys to clear.',
-      )
-    } catch {
-      showToast('Unable to clear local storage.')
     }
   }
 
@@ -3789,26 +3794,13 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (
-      hasAttemptedStartupSyncRef.current ||
-      isLoadingDevinSession ||
-      !hasDevinSession ||
-      !hasDevinOrgId ||
-      !hasGithubOauthSession ||
-      !hasGithubScope
-    ) {
+    if (!shouldAutoSyncStartup) {
       return
     }
 
     hasAttemptedStartupSyncRef.current = true
     void syncGithubFeedRef.current?.({ autoTriggered: true })
-  }, [
-    hasDevinSession,
-    hasDevinOrgId,
-    hasGithubOauthSession,
-    hasGithubScope,
-    isLoadingDevinSession,
-  ])
+  }, [shouldAutoSyncStartup])
 
   useEffect(() => {
     if (!isDesktopLayout || !hasActiveGithubFeed || activeTab === 'code') {
@@ -4437,8 +4429,8 @@ function App() {
             }}
             disabled={isSyncingGithubFeed || isVerifyingDevinConnection || !canSyncGithubFeed}
           >
-            {isSyncingGithubFeed ? <span className="spinner" aria-hidden="true" /> : null}
-            <span>{isSyncingGithubFeed ? 'Refreshing GitHub Feed...' : 'Refresh GitHub Feed'}</span>
+            {isSyncingGithubFeed ? <span className="spinner" aria-hidden="true" /> : <Github size={14} />}
+            <span>{isSyncingGithubFeed ? 'Refreshing Feed...' : 'Refresh Feed'}</span>
           </button>
         ) : null}
 
@@ -4449,27 +4441,14 @@ function App() {
             onClick={handleStartGithubOauth}
             disabled={!HAS_GITHUB_OAUTH_CONFIG || isDisconnectingGithubOauthSession}
           >
-            <span>
-              {!HAS_GITHUB_OAUTH_CONFIG
-                ? 'GitHub OAuth Not Configured'
-                : 'Connect GitHub OAuth'}
-            </span>
-          </button>
-        ) : null}
-
-        {GITHUB_OAUTH_DISCONNECT_URL && hasGithubOauthSession ? (
-          <button
-            type="button"
-            className="fab-button danger auth-verify-button"
-            onClick={() => {
-              void handleDisconnectGithubOauth()
-            }}
-            disabled={isDisconnectingGithubOauthSession}
-          >
-            {isDisconnectingGithubOauthSession ? <span className="spinner" aria-hidden="true" /> : null}
-            <span>
-              {isDisconnectingGithubOauthSession ? 'Signing out...' : 'Sign out'}
-            </span>
+            {!HAS_GITHUB_OAUTH_CONFIG ? (
+              <span>GitHub OAuth Not Configured</span>
+            ) : (
+              <>
+                <Github size={14} />
+                <span>Sign In</span>
+              </>
+            )}
           </button>
         ) : null}
 
@@ -4558,7 +4537,7 @@ function App() {
           }}
           disabled={isVerifyingDevinConnection}
         >
-          {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : null}
+          {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={14} />}
           <span>Connect to Devin</span>
         </button>
         {!hasVerifiedDevinConnection ? (
@@ -4574,27 +4553,33 @@ function App() {
       </div>
 
       {panelClassName !== 'startup-auth-panel' ? (
-        <div className="auth-inline-grid auth-reset-row">
-          <button
-            type="button"
-            className="fab-button secondary auth-clear-button"
-            onClick={() => {
-              void handleClearSession()
-            }}
-            disabled={isClearingSession || isVerifyingDevinConnection || isSyncingGithubFeed}
-          >
-            {isClearingSession ? <span className="spinner" aria-hidden="true" /> : null}
-            <span>{isClearingSession ? 'Clearing Session...' : 'Clear Session'}</span>
-          </button>
-
-          <button
-            type="button"
-            className="fab-button secondary auth-clear-button"
-            onClick={handleClearLocalStorage}
-            disabled={isClearingSession}
-          >
-            <span>Clear Local Storage</span>
-          </button>
+        <div className="auth-danger-zone">
+          <div className="auth-inline-grid auth-clear-row">
+            <button
+              type="button"
+              className="fab-button secondary auth-clear-button"
+              onClick={() => {
+                void handleClearSession()
+              }}
+              disabled={isClearingSession || isVerifyingDevinConnection || isSyncingGithubFeed}
+            >
+              {isClearingSession ? <span className="spinner" aria-hidden="true" /> : null}
+              <span>{isClearingSession ? 'Clearing...' : 'Clear Session & Local Data'}</span>
+            </button>
+            {GITHUB_OAUTH_DISCONNECT_URL && hasGithubOauthSession ? (
+              <button
+                type="button"
+                className="fab-button danger auth-clear-button"
+                onClick={() => {
+                  void handleDisconnectGithubOauth()
+                }}
+                disabled={isDisconnectingGithubOauthSession || isClearingSession}
+              >
+                {isDisconnectingGithubOauthSession ? <span className="spinner" aria-hidden="true" /> : null}
+                <span>{isDisconnectingGithubOauthSession ? 'Signing out...' : 'Sign out'}</span>
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </section>
