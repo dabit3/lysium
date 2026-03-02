@@ -4567,28 +4567,30 @@ function App() {
         ) : null}
       </div>
 
-      <div className="auth-inline-grid auth-reset-row">
-        <button
-          type="button"
-          className="fab-button secondary auth-clear-button"
-          onClick={() => {
-            void handleClearSession()
-          }}
-          disabled={isClearingSession || isVerifyingDevinConnection || isSyncingGithubFeed}
-        >
-          {isClearingSession ? <span className="spinner" aria-hidden="true" /> : null}
-          <span>{isClearingSession ? 'Clearing Session...' : 'Clear Session'}</span>
-        </button>
+      {panelClassName !== 'startup-auth-panel' ? (
+        <div className="auth-inline-grid auth-reset-row">
+          <button
+            type="button"
+            className="fab-button secondary auth-clear-button"
+            onClick={() => {
+              void handleClearSession()
+            }}
+            disabled={isClearingSession || isVerifyingDevinConnection || isSyncingGithubFeed}
+          >
+            {isClearingSession ? <span className="spinner" aria-hidden="true" /> : null}
+            <span>{isClearingSession ? 'Clearing Session...' : 'Clear Session'}</span>
+          </button>
 
-        <button
-          type="button"
-          className="fab-button secondary auth-clear-button"
-          onClick={handleClearLocalStorage}
-          disabled={isClearingSession}
-        >
-          <span>Clear Local Storage</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            className="fab-button secondary auth-clear-button"
+            onClick={handleClearLocalStorage}
+            disabled={isClearingSession}
+          >
+            <span>Clear Local Storage</span>
+          </button>
+        </div>
+      ) : null}
     </section>
   )
 
