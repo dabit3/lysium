@@ -10,8 +10,6 @@ import {
   ArrowDown,
   MessageSquarePlus,
   Play,
-  BrainCircuit,
-  Eye,
   Rocket,
   RefreshCw,
   Github,
@@ -230,7 +228,8 @@ const GITHUB_OAUTH_DISCONNECT_URL = '/api/github/oauth/disconnect'
 const HAS_GITHUB_OAUTH_CONFIG = true
 const MAX_CARD_BODY_LINES = 120
 const MAX_CARD_CONTEXT_SUMMARY_LINES = 24
-const DESKTOP_LAYOUT_MEDIA_QUERY = '(min-width: 1120px)'
+const DESKTOP_LAYOUT_MEDIA_QUERY = '(min-width: 1000px)'
+const DESKTOP_WIDE_LAYOUT_MEDIA_QUERY = '(min-width: 1300px)'
 
 const ASSESSED_ISSUES_STORAGE_KEY = 'minion.assessed_issues.v1'
 const ASSESSED_PRS_STORAGE_KEY = 'minion.assessed_prs.v1'
@@ -1337,7 +1336,11 @@ function App() {
   const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_LAYOUT_MEDIA_QUERY).matches,
   )
+  const [isDesktopWideLayout, setIsDesktopWideLayout] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia(DESKTOP_WIDE_LAYOUT_MEDIA_QUERY).matches,
+  )
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
+  const [activityPanelView, setActivityPanelView] = useState<'sessions' | 'activity'>('sessions')
   const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
     () =>
       (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
@@ -1485,10 +1488,11 @@ function App() {
     (count, job) => count + (job.status === 'running' ? 1 : 0),
     0,
   )
+  const hasActiveGithubFeed = hasSyncedGithubFeed && hasGithubOauthSession
   const desktopIssueCountLabel =
-    isDesktopLayout && hasSyncedGithubFeed ? `Issues (${issues.length})` : 'Issues'
+    isDesktopLayout && hasActiveGithubFeed ? `Issues (${issues.length})` : 'Issues'
   const desktopPullRequestCountLabel =
-    isDesktopLayout && hasSyncedGithubFeed ? `PRs (${pullRequests.length})` : 'PRs'
+    isDesktopLayout && hasActiveGithubFeed ? `PRs (${pullRequests.length})` : 'PRs'
   const desktopSwipeTab: TabKey = activeTab === 'issues' ? 'issues' : 'pullRequests'
   const desktopLeftSwipeAction =
     activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'left')
@@ -1496,11 +1500,17 @@ function App() {
     activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'right')
   const desktopDownSwipeAction =
     activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'down')
+  const showDesktopLeftNav = isDesktopLayout && hasActiveGithubFeed
+  const showDesktopWideRail = showDesktopLeftNav && isDesktopWideLayout
+  const showDesktopRightRail = showDesktopLeftNav && (showDesktopWideRail || isSettingsOpen)
+  const showDesktopSettingsPanel = showDesktopRightRail && isSettingsOpen
+  const showDesktopActivityRail = showDesktopRightRail && showDesktopWideRail && !isSettingsOpen
+  const showDesktopMainActivity = showDesktopLeftNav && !showDesktopWideRail && isDesktopActivityOpen
   const canTriggerDesktopSwipe =
     isDesktopLayout &&
-    hasSyncedGithubFeed &&
+    hasActiveGithubFeed &&
     activeTab !== 'code' &&
-    !isDesktopActivityOpen &&
+    !showDesktopMainActivity &&
     Boolean(topCard)
   const hasApiKey = hasDevinSession || devinApiKey.trim().length > 0
   const hasDevinOrgId = devinOrgId.trim().length > 0
@@ -1511,11 +1521,8 @@ function App() {
     HAS_GITHUB_OAUTH_CONFIG &&
     hasGithubOauthSession &&
     hasGithubScope
-  const showStartupLoadingState = !hasSyncedGithubFeed && isSyncingGithubFeed
-  const shouldShowCredentialSetup = !hasSyncedGithubFeed && !showStartupLoadingState
-  const showDesktopLeftNav = isDesktopLayout && hasSyncedGithubFeed
-  const showDesktopSettingsPanel = showDesktopLeftNav && isSettingsOpen
-  const showDesktopMainActivity = showDesktopLeftNav && isDesktopActivityOpen
+  const showStartupLoadingState = !hasActiveGithubFeed && isSyncingGithubFeed
+  const shouldShowCredentialSetup = !hasActiveGithubFeed && !showStartupLoadingState
 
   const showToast = (message: string, onUndo?: () => void, timeoutMs?: number) => {
     setToastMessage(message)
@@ -1845,16 +1852,21 @@ function App() {
     hasAttemptedStartupSyncRef.current = false
   }
 
+  const applyGithubSignedOutUiState = () => {
+    setHasGithubOauthSession(false)
+    setGithubOauthLogin(null)
+    resetSyncedGithubFeedState()
+  }
+
   const handleDisconnectGithubOauth = async () => {
     if (isDisconnectingGithubOauthSession) {
       return
     }
 
+    applyGithubSignedOutUiState()
+    await clearPersistedGithubSearchScope()
+
     if (!GITHUB_OAUTH_DISCONNECT_URL) {
-      setHasGithubOauthSession(false)
-      setGithubOauthLogin(null)
-      resetSyncedGithubFeedState()
-      await clearPersistedGithubSearchScope()
       return
     }
 
@@ -1872,15 +1884,10 @@ function App() {
       if (!response.ok && response.status !== 204) {
         throw new Error(await parseDevinError(response))
       }
-
-      setHasGithubOauthSession(false)
-      setGithubOauthLogin(null)
-      resetSyncedGithubFeedState()
-      await clearPersistedGithubSearchScope()
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to disconnect GitHub OAuth.'
-      showToast(`GitHub OAuth disconnect failed: ${message}`)
+      showToast(`Signed out locally. GitHub OAuth disconnect failed on server: ${message}`)
     } finally {
       setIsDisconnectingGithubOauthSession(false)
     }
@@ -2753,7 +2760,7 @@ function App() {
     const tabAtSwipe = activeTab
     const cardAtSwipe = topCard
     const undoable = isUndoableSwipe(tabAtSwipe, direction)
-    const undoTimeoutMs = tabAtSwipe === 'pullRequests' ? 3000 : 4000
+    const undoTimeoutMs = 4000
     const exitDurationMs = getSwipeExitDurationMs(direction, dragOffsetRef.current)
 
     const buttonTriggered = dragOffsetRef.current.x === 0 && dragOffsetRef.current.y === 0
@@ -3676,6 +3683,7 @@ function App() {
 
   const handleDesktopNavTabSelect = (nextTab: TabKey) => {
     setIsDesktopActivityOpen(false)
+    setIsSettingsOpen(false)
     handleTabChange(nextTab)
   }
 
@@ -3689,16 +3697,20 @@ function App() {
       return
     }
 
-    const media = window.matchMedia(DESKTOP_LAYOUT_MEDIA_QUERY)
+    const desktopMedia = window.matchMedia(DESKTOP_LAYOUT_MEDIA_QUERY)
+    const desktopWideMedia = window.matchMedia(DESKTOP_WIDE_LAYOUT_MEDIA_QUERY)
     const syncDesktopLayout = () => {
-      setIsDesktopLayout(media.matches)
+      setIsDesktopLayout(desktopMedia.matches)
+      setIsDesktopWideLayout(desktopWideMedia.matches)
     }
 
     syncDesktopLayout()
-    media.addEventListener('change', syncDesktopLayout)
+    desktopMedia.addEventListener('change', syncDesktopLayout)
+    desktopWideMedia.addEventListener('change', syncDesktopLayout)
 
     return () => {
-      media.removeEventListener('change', syncDesktopLayout)
+      desktopMedia.removeEventListener('change', syncDesktopLayout)
+      desktopWideMedia.removeEventListener('change', syncDesktopLayout)
     }
   }, [])
 
@@ -3713,10 +3725,16 @@ function App() {
   }, [isDesktopLayout])
 
   useEffect(() => {
-    if (!hasSyncedGithubFeed) {
+    if (isDesktopWideLayout) {
       setIsDesktopActivityOpen(false)
     }
-  }, [hasSyncedGithubFeed])
+  }, [isDesktopWideLayout])
+
+  useEffect(() => {
+    if (!hasActiveGithubFeed) {
+      setIsDesktopActivityOpen(false)
+    }
+  }, [hasActiveGithubFeed])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -3787,7 +3805,7 @@ function App() {
   ])
 
   useEffect(() => {
-    if (!isDesktopLayout || !hasSyncedGithubFeed || activeTab === 'code') {
+    if (!isDesktopLayout || !hasActiveGithubFeed || activeTab === 'code') {
       return
     }
 
@@ -3829,7 +3847,7 @@ function App() {
     activeTab,
     canTriggerDesktopSwipe,
     commitSwipe,
-    hasSyncedGithubFeed,
+    hasActiveGithubFeed,
     isCommentModalOpen,
     isDesktopLayout,
   ])
@@ -4377,6 +4395,89 @@ function App() {
       className={`auth-panel ${panelClassName ?? ''}`.trim()}
       aria-label="Devin API authentication"
     >
+      <div className="auth-inline-grid oauth-actions-grid">
+        <div className="auth-panel-header">
+          <h3>GitHub</h3>
+          <span className={`auth-chip ${hasGithubOauthSession ? 'connected' : 'missing'}`}>
+            {!HAS_GITHUB_OAUTH_CONFIG
+              ? 'not configured'
+              : hasGithubOauthSession
+                ? 'connected'
+                : 'not connected'}
+          </span>
+        </div>
+
+        {hasGithubOauthSession ? (
+          <label className="auth-field">
+            <span>GitHub scope</span>
+            <input
+              type="text"
+              value={githubSearchScope}
+              placeholder="acme (defaults to org:acme) or user:acme"
+              autoComplete="off"
+              onChange={(event) => {
+                setGithubSearchScope(event.target.value)
+              }}
+            />
+          </label>
+        ) : null}
+
+        {hasGithubOauthSession && !isDesktopLayout ? (
+          <button
+            type="button"
+            className="fab-button primary auth-sync-button"
+            onClick={() => {
+              void handleSyncGithubFeed()
+            }}
+            disabled={isSyncingGithubFeed || isVerifyingDevinConnection || !canSyncGithubFeed}
+          >
+            {isSyncingGithubFeed ? <span className="spinner" aria-hidden="true" /> : null}
+            <span>{isSyncingGithubFeed ? 'Refreshing GitHub Feed...' : 'Refresh GitHub Feed'}</span>
+          </button>
+        ) : null}
+
+        {!hasGithubOauthSession ? (
+          <button
+            type="button"
+            className="fab-button secondary auth-verify-button"
+            onClick={handleStartGithubOauth}
+            disabled={!HAS_GITHUB_OAUTH_CONFIG || isDisconnectingGithubOauthSession}
+          >
+            <span>
+              {!HAS_GITHUB_OAUTH_CONFIG
+                ? 'GitHub OAuth Not Configured'
+                : 'Connect GitHub OAuth'}
+            </span>
+          </button>
+        ) : null}
+
+        {GITHUB_OAUTH_DISCONNECT_URL && hasGithubOauthSession ? (
+          <button
+            type="button"
+            className="fab-button danger auth-verify-button"
+            onClick={() => {
+              void handleDisconnectGithubOauth()
+            }}
+            disabled={isDisconnectingGithubOauthSession}
+          >
+            {isDisconnectingGithubOauthSession ? <span className="spinner" aria-hidden="true" /> : null}
+            <span>
+              {isDisconnectingGithubOauthSession ? 'Signing out...' : 'Sign out'}
+            </span>
+          </button>
+        ) : null}
+
+        {githubOauthLogin ? <p className="auth-note">Connected as {githubOauthLogin}.</p> : null}
+
+        {!HAS_GITHUB_OAUTH_CONFIG ? (
+          <p className="auth-note">GitHub OAuth is not configured on this server.</p>
+        ) : null}
+
+        {lastGithubSyncSummary ? (
+          <p className="auth-sync-meta">Last sync: {lastGithubSyncSummary}</p>
+        ) : null}
+      </div>
+
       <div className="auth-panel-header">
         <h3>Devin</h3>
         <span
@@ -4452,7 +4553,7 @@ function App() {
           disabled={isVerifyingDevinConnection}
         >
           {isVerifyingDevinConnection ? <span className="spinner" aria-hidden="true" /> : null}
-          <span>Verify API Key</span>
+          <span>Connect to Devin</span>
         </button>
         {!hasVerifiedDevinConnection ? (
           <a
@@ -4461,91 +4562,8 @@ function App() {
             rel="noreferrer noopener"
             className="fab-button assess-button pr-assess-action auth-verify-button"
           >
-            Sign Up
+            Get API Key
           </a>
-        ) : null}
-      </div>
-
-      <div className="auth-inline-grid oauth-actions-grid">
-        <div className="auth-panel-header">
-          <h3>GitHub</h3>
-          <span className={`auth-chip ${hasGithubOauthSession ? 'connected' : 'missing'}`}>
-            {!HAS_GITHUB_OAUTH_CONFIG
-              ? 'not configured'
-              : hasGithubOauthSession
-                ? 'connected'
-                : 'not connected'}
-          </span>
-        </div>
-
-        {hasGithubOauthSession ? (
-          <label className="auth-field">
-            <span>GitHub scope</span>
-            <input
-              type="text"
-              value={githubSearchScope}
-              placeholder="acme (defaults to org:acme) or user:acme"
-              autoComplete="off"
-              onChange={(event) => {
-                setGithubSearchScope(event.target.value)
-              }}
-            />
-          </label>
-        ) : null}
-
-        {hasGithubOauthSession && !isDesktopLayout ? (
-          <button
-            type="button"
-            className="fab-button primary auth-sync-button"
-            onClick={() => {
-              void handleSyncGithubFeed()
-            }}
-            disabled={isSyncingGithubFeed || isVerifyingDevinConnection || !canSyncGithubFeed}
-          >
-            {isSyncingGithubFeed ? <span className="spinner" aria-hidden="true" /> : null}
-            <span>{isSyncingGithubFeed ? 'Syncing GitHub Feed...' : 'Sync GitHub Feed'}</span>
-          </button>
-        ) : null}
-
-        <button
-          type="button"
-          className="fab-button secondary auth-verify-button"
-          onClick={handleStartGithubOauth}
-          disabled={!HAS_GITHUB_OAUTH_CONFIG || isDisconnectingGithubOauthSession}
-        >
-          <span>
-            {!HAS_GITHUB_OAUTH_CONFIG
-              ? 'GitHub OAuth Not Configured'
-              : hasGithubOauthSession
-                ? 'Reconnect GitHub OAuth'
-                : 'Connect GitHub OAuth'}
-          </span>
-        </button>
-
-        {GITHUB_OAUTH_DISCONNECT_URL && hasGithubOauthSession ? (
-          <button
-            type="button"
-            className="fab-button danger auth-verify-button"
-            onClick={() => {
-              void handleDisconnectGithubOauth()
-            }}
-            disabled={isDisconnectingGithubOauthSession}
-          >
-            {isDisconnectingGithubOauthSession ? <span className="spinner" aria-hidden="true" /> : null}
-            <span>
-              {isDisconnectingGithubOauthSession ? 'Signing out...' : 'Sign out'}
-            </span>
-          </button>
-        ) : null}
-
-        {githubOauthLogin ? <p className="auth-note">Connected as {githubOauthLogin}.</p> : null}
-
-        {!HAS_GITHUB_OAUTH_CONFIG ? (
-          <p className="auth-note">GitHub OAuth is not configured on this server.</p>
-        ) : null}
-
-        {lastGithubSyncSummary ? (
-          <p className="auth-sync-meta">Last sync: {lastGithubSyncSummary}</p>
         ) : null}
       </div>
 
@@ -4580,12 +4598,12 @@ function App() {
     return (
       <>
         <div className="jobs-section-header">
-          <h4>Sessions & Jobs</h4>
+          <h4>Sessions</h4>
           <span>{jobs.length}</span>
         </div>
 
         {jobs.length === 0 ? (
-          <p className="jobs-empty">No sessions or jobs yet.</p>
+          <p className="jobs-empty">No sessions yet.</p>
         ) : (
           <ul className="jobs-list">
             {jobs.map((job) => (
@@ -4650,12 +4668,12 @@ function App() {
   const renderRecentActionsSectionContent = () => (
     <>
       <div className="jobs-section-header">
-        <h4>Recent Actions</h4>
+        <h4>Activity</h4>
         <span>{actionStream.length}</span>
       </div>
 
       {actionStream.length === 0 ? (
-        <p className="jobs-empty">No actions yet.</p>
+        <p className="jobs-empty">No activity yet.</p>
       ) : (
         <ul className="jobs-actions-list">
           {actionStream.slice(0, 18).map((action) => (
@@ -4675,18 +4693,41 @@ function App() {
   const renderActivityPanel = (panelClassName?: string) => (
     <section
       className={`auth-panel ${panelClassName ?? ''}`.trim()}
-      aria-label="Sessions, jobs, and recent actions"
+      aria-label="Sessions and activity"
     >
       <div className="auth-panel-header">
         <h3>Activity</h3>
+        <div className="activity-view-toggle" role="tablist" aria-label="Activity view">
+          <button
+            type="button"
+            role="tab"
+            className={`activity-toggle-button ${activityPanelView === 'sessions' ? 'is-active' : ''}`.trim()}
+            aria-selected={activityPanelView === 'sessions'}
+            onClick={() => setActivityPanelView('sessions')}
+          >
+            Sessions
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={`activity-toggle-button ${activityPanelView === 'activity' ? 'is-active' : ''}`.trim()}
+            aria-selected={activityPanelView === 'activity'}
+            onClick={() => setActivityPanelView('activity')}
+          >
+            Activity
+          </button>
+        </div>
       </div>
-      <div className="jobs-drawer-content desktop-activity-content">
-        <section className="jobs-drawer-section" aria-label="Sessions and jobs">
-          {renderJobsSectionContent()}
-        </section>
-        <section className="jobs-drawer-section" aria-label="Recent actions">
-          {renderRecentActionsSectionContent()}
-        </section>
+      <div className="jobs-drawer-content desktop-activity-content activity-content-single">
+        {activityPanelView === 'sessions' ? (
+          <section className="jobs-drawer-section" aria-label="Sessions">
+            {renderJobsSectionContent()}
+          </section>
+        ) : (
+          <section className="jobs-drawer-section" aria-label="Activity">
+            {renderRecentActionsSectionContent()}
+          </section>
+        )}
       </div>
     </section>
   )
@@ -4722,7 +4763,7 @@ function App() {
       ) : null}
 
       <main className="app-shell">
-        {!isDesktopLayout && hasSyncedGithubFeed ? (
+        {!isDesktopLayout && hasActiveGithubFeed ? (
           <header className="top-header">
             <div className="top-toggle" aria-label="Select triage mode">
               <button
@@ -4758,7 +4799,7 @@ function App() {
                 <span className="jobs-count-badge">{runningJobsCount}</span>
               </button>
 
-              {hasSyncedGithubFeed ? (
+              {hasActiveGithubFeed ? (
                 <button
                   type="button"
                   className="jobs-button settings-button"
@@ -4773,7 +4814,7 @@ function App() {
         ) : null}
 
         <div
-          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopSettingsPanel ? 'desktop-settings-open' : ''}`.trim()}
+          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopSettingsPanel ? 'desktop-settings-open' : ''} ${showDesktopWideRail ? 'desktop-wide-rail' : ''}`.trim()}
         >
           {showDesktopLeftNav ? (
             <aside className="desktop-left-nav" aria-label="Desktop navigation">
@@ -4804,9 +4845,11 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className={`desktop-nav-button ${showDesktopMainActivity ? 'is-active' : ''}`.trim()}
+                  className={`desktop-nav-button ${isDesktopWideLayout ? (showDesktopActivityRail ? 'is-active' : '') : (showDesktopMainActivity ? 'is-active' : '')}`.trim()}
                   onClick={() => {
-                    setIsDesktopActivityOpen(true)
+                    if (!isDesktopWideLayout) {
+                      setIsDesktopActivityOpen(true)
+                    }
                     setIsSettingsOpen(false)
                   }}
                 >
@@ -4816,7 +4859,14 @@ function App() {
                 <button
                   type="button"
                   className={`desktop-nav-button ${isSettingsOpen ? 'is-active' : ''}`.trim()}
-                  onClick={() => setIsSettingsOpen((previous) => !previous)}
+                  onClick={() => {
+                    if (isDesktopWideLayout) {
+                      setIsDesktopActivityOpen(false)
+                      setIsSettingsOpen(true)
+                      return
+                    }
+                    setIsSettingsOpen((previous) => !previous)
+                  }}
                   aria-pressed={isSettingsOpen}
                 >
                   Settings
@@ -4946,12 +4996,22 @@ function App() {
               renderActivityPanel('desktop-main-activity')
             ) : (
               <>
-                {!hasSyncedGithubFeed ? (
+                {!hasActiveGithubFeed ? (
                   isDesktopLayout ? (
                     <div className="startup-desktop-welcome">
                       <div className="startup-desktop-logo">
                         <span className="settings-app-name startup-desktop-logo-text">LYSIUM</span>
-                        <p className="startup-desktop-tagline">GitHub triage, powered by Devin</p>
+                        <p className="startup-desktop-tagline">
+                          GitHub triage, powered by{' '}
+                          <a
+                            href="https://devin.ai/"
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="startup-tagline-link"
+                          >
+                            Devin
+                          </a>
+                        </p>
                       </div>
                       <div className="startup-desktop-panel">
                         {showStartupLoadingState
@@ -4966,7 +5026,17 @@ function App() {
                       <div className="startup-mobile-welcome">
                         <div className="startup-desktop-logo">
                           <span className="settings-app-name startup-mobile-logo-text">LYSIUM</span>
-                          <p className="startup-desktop-tagline">GitHub triage, powered by Devin</p>
+                          <p className="startup-desktop-tagline">
+                          GitHub triage, powered by{' '}
+                          <a
+                            href="https://devin.ai/"
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="startup-tagline-link"
+                          >
+                            Devin
+                          </a>
+                        </p>
                         </div>
                         <div className="startup-mobile-panel">
                           {showStartupLoadingState
@@ -4979,7 +5049,7 @@ function App() {
                     </section>
                   )
                 ) : null}
-      {hasSyncedGithubFeed ? (
+      {hasActiveGithubFeed ? (
         activeTab === 'code' ? (
           <section className="deck-shell" key="tab-code">
             <div className="deck-frame">{renderReposPanel()}</div>
@@ -5236,7 +5306,7 @@ function App() {
         )
       ) : null}
 
-        {hasSyncedGithubFeed && activeTab !== 'code' && !isDesktopLayout ? (
+        {hasActiveGithubFeed && activeTab !== 'code' && !isDesktopLayout ? (
           <section className="fab-section" aria-label="Triage actions">
             {activeTab === 'issues' ? (
               <div className="fab-row issue-actions">
@@ -5247,7 +5317,7 @@ function App() {
                     target="_blank"
                     rel="noreferrer noopener"
                   >
-                    <Eye size={16} /> Assessment
+                    <DevinLogo size={16} /> Assessment
                   </a>
                 ) : (
                   <button
@@ -5260,8 +5330,8 @@ function App() {
                   >
                     {isAssessingIssue ? (
                       <span className="spinner" aria-hidden="true" />
-                    ) : <BrainCircuit size={16} />}
-                    <span>{isActiveIssueAssessed ? 'Already Assessed' : 'Devin Assess'}</span>
+                    ) : <DevinLogo size={16} />}
+                    <span>{isActiveIssueAssessed ? 'Already Assessed' : 'Assess'}</span>
                   </button>
                 )}
               </div>
@@ -5311,20 +5381,20 @@ function App() {
                 <>
                   {activePullRequestReviewLink ? (
                     <a
-                      className="fab-button primary reviewed-pr-link"
+                      className="fab-button assess-button pr-assess-action reviewed-pr-link"
                       href={activePullRequestReviewLink}
                       target="_blank"
                       rel="noreferrer noopener"
                     >
-                      <Eye size={16} /> Review
+                      <DevinLogo size={16} /> Review
                     </a>
                   ) : (
                     <button
                       type="button"
-                      className="fab-button primary"
+                      className="fab-button assess-button pr-assess-action"
                       disabled
                     >
-                      <Eye size={16} /> <span>Review</span>
+                      <DevinLogo size={16} /> <span>Review</span>
                     </button>
                   )}
 
@@ -5335,7 +5405,7 @@ function App() {
                       target="_blank"
                       rel="noreferrer noopener"
                     >
-                      <Eye size={16} /> Assessment
+                      <DevinLogo size={16} /> Assessment
                     </a>
                   ) : (
                     <button
@@ -5348,7 +5418,7 @@ function App() {
                     >
                       {isAssessingPullRequest ? (
                         <span className="spinner" aria-hidden="true" />
-                      ) : <BrainCircuit size={16} />}
+                      ) : <DevinLogo size={16} />}
                       <span>{isActivePrAssessed ? 'Already Assessed' : 'Assess'}</span>
                     </button>
                   )}
@@ -5370,10 +5440,18 @@ function App() {
             )}
           </div>
 
-          {showDesktopSettingsPanel ? (
-            <aside className="desktop-side-rail settings-open" aria-label="Desktop settings">
-              {renderThemeToggleSection('desktop-theme-toggle')}
-              {renderAuthPanel('desktop-settings-panel')}
+          {showDesktopRightRail ? (
+            <aside
+              className={`desktop-side-rail ${showDesktopSettingsPanel ? 'settings-open' : 'activity-only'}`.trim()}
+              aria-label="Desktop side panel"
+            >
+              {showDesktopSettingsPanel ? (
+                <>
+                  {renderThemeToggleSection('desktop-theme-toggle')}
+                  {renderAuthPanel('desktop-settings-panel')}
+                </>
+              ) : null}
+              {showDesktopActivityRail ? renderActivityPanel('desktop-activity-panel') : null}
             </aside>
           ) : null}
         </div>
@@ -5522,7 +5600,7 @@ function App() {
               className="jobs-drawer"
               role="dialog"
               aria-modal="true"
-              aria-label="Sessions, jobs, and recent actions"
+              aria-label="Sessions and activity"
               onClick={(event) => event.stopPropagation()}
               initial={drawerPanelInitial}
               animate={{ x: 0, opacity: 1 }}
@@ -5553,7 +5631,7 @@ function App() {
               >
                 <motion.section
                   className="jobs-drawer-section"
-                  aria-label="Sessions and jobs"
+                  aria-label="Sessions"
                   initial={drawerContentInitial}
                   animate={{ opacity: 1, y: 0 }}
                   transition={getDrawerContentTransition(0.11)}
@@ -5563,7 +5641,7 @@ function App() {
 
                 <motion.section
                   className="jobs-drawer-section"
-                  aria-label="Recent actions"
+                  aria-label="Activity"
                   initial={drawerContentInitial}
                   animate={{ opacity: 1, y: 0 }}
                   transition={getDrawerContentTransition(0.15)}
