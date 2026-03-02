@@ -1864,6 +1864,9 @@ function App() {
     }
 
     applyGithubSignedOutUiState()
+    if (!isDesktopLayout) {
+      setIsSettingsOpen(false)
+    }
     await clearPersistedGithubSearchScope()
 
     if (!GITHUB_OAUTH_DISCONNECT_URL) {
