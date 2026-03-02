@@ -235,6 +235,7 @@ const ASSESSED_ISSUES_STORAGE_KEY = 'minion.assessed_issues.v1'
 const ASSESSED_PRS_STORAGE_KEY = 'minion.assessed_prs.v1'
 const GITHUB_SCOPE_STORAGE_KEY = 'minion.github_scope.v1'
 const DEVINS_MACHINE_REPO_LABEL = "Devin's machine"
+const DEVIN_GITHUB_COMMENT_MENTION = '@devin-ai-integration'
 const JOBS_STORAGE_KEY = 'minion.jobs.v1'
 
 const loadPersistedJobs = (): JobEntry[] => {
@@ -3479,6 +3480,21 @@ function App() {
     setIsCommentModalOpen(true)
   }
 
+  const handleTagDevinInComment = () => {
+    setCommentBody((previous) => {
+      const normalized = previous.trim()
+      if (normalized.toLowerCase().includes(DEVIN_GITHUB_COMMENT_MENTION)) {
+        return previous
+      }
+
+      if (normalized.length === 0) {
+        return DEVIN_GITHUB_COMMENT_MENTION
+      }
+
+      return `${normalized}\n\n${DEVIN_GITHUB_COMMENT_MENTION}`
+    })
+  }
+
   const handleSubmitComment = async () => {
     const pr = activePr
     if (!commentBody.trim()) {
@@ -4396,8 +4412,16 @@ function App() {
       <header className="code-panel-header">
         <h2>Repositories</h2>
         <p>
-          Start with Devin's machine (default context) or pick a repository, then describe
-          what Devin should build and press Enter to start a PR session.
+          Start with{' '}
+          <a
+            href="https://docs.devin.ai/onboard-devin/repo-setup#repo-setup"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="startup-tagline-link"
+          >
+            Devin's machine
+          </a>{' '}
+          or pick a repo, describe what Devin should build, and press Enter to start a PR session.
         </p>
       </header>
 
@@ -5790,6 +5814,17 @@ function App() {
                 autoCorrect="off"
                 autoCapitalize="off"
               />
+
+              <div className="modal-tag-row">
+                <button
+                  type="button"
+                  className="fab-button secondary modal-tag-button"
+                  onClick={handleTagDevinInComment}
+                  disabled={isPostingComment}
+                >
+                  Tag Devin
+                </button>
+              </div>
 
               <div className="modal-actions">
                 <button
