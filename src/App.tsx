@@ -1339,9 +1339,9 @@ function App() {
   const [activityPanelView, setActivityPanelView] = useState<'sessions' | 'actions'>('sessions')
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
-  const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
+  const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora' | 'banana'>(
     () =>
-      (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
+      (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora' | 'banana') ??
       'dark',
   )
   const [devinApiKey, setDevinApiKey] = useState('')
@@ -4529,6 +4529,13 @@ function App() {
           onClick={() => setColorTheme('aurora')}
         >
           Aurora
+        </button>
+        <button
+          type="button"
+          className={`theme-option${colorTheme === 'banana' ? ' is-active' : ''}`}
+          onClick={() => setColorTheme('banana')}
+        >
+          Banana
         </button>
       </div>
     </div>
