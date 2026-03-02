@@ -1,6 +1,8 @@
 # Lysium
 
-GitHub triage reimagined as a gesture layer over AI agents. Ship, assess, delegate, merge, close, review, all from your thumb.
+Agent-first command layer for dev Capture intent, launch execution, merge outcomes — without breaking flow.
+
+![Lysium](banner.png)
 
 ---
 
