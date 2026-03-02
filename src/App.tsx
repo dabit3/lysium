@@ -4421,7 +4421,8 @@ function App() {
           >
             Devin's machine
           </a>{' '}
-          or pick a repo, describe what Devin should build, and press Enter to start a PR session.
+          or pick a repo, describe what you want built, and launch an agent that writes the code and
+opens a PR.
         </p>
       </header>
 
