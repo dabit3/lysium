@@ -3243,7 +3243,7 @@
 [data-theme="among-us"] .fab-button.danger,
 [data-theme="among-us"] .ci-status.conflict {
   border-color: rgba(197, 17, 17, 0.7);
-  color: #c51111;
+  color: #ff6b6b;
 }
 
 [data-theme="among-us"] .code-token.diffAdd {
@@ -3253,7 +3253,7 @@
 }
 
 [data-theme="among-us"] .code-token.diffRemove {
-  color: #c51111;
+  color: #ff6b6b;
   background: rgba(197, 17, 17, 0.12);
   box-shadow: inset 2px 0 0 rgba(197, 17, 17, 0.46);
 }
