@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import './App.css'
 
@@ -13,12 +13,19 @@ import {
   Rocket,
   RefreshCw,
   Github,
+  Plus,
+  GitPullRequest,
+  CircleDot,
+  FileText,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
+import { DndContext, useDroppable, useDraggable, pointerWithin } from '@dnd-kit/core'
+import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
 
 type TabKey = 'issues' | 'pullRequests' | 'code'
 type SwipeDirection = 'left' | 'right' | 'down'
+type BoardColumnId = 'inbox' | 'inReview' | 'blocked' | 'backlog' | 'done'
 
 interface BaseCard {
   id: number
@@ -76,6 +83,27 @@ interface AssessedIssueEntry {
   assessedAt: number
   sessionUrl?: string
   sessionId?: string
+}
+
+interface BacklogItem {
+  localId: string
+  repo: string
+  title: string
+  body: string
+  labels: string[]
+  createdAt: number
+}
+
+interface BoardCard {
+  uniqueId: string
+  kind: 'issue' | 'pullRequest' | 'backlog'
+  id: number
+  title: string
+  repo: string
+  avatarUrl: string
+  columnId: BoardColumnId
+  sourceCard?: TriageCard
+  backlogItem?: BacklogItem
 }
 
 interface PullRequestCodeEntry {
@@ -237,6 +265,52 @@ const GITHUB_SCOPE_STORAGE_KEY = 'minion.github_scope.v1'
 const DEVINS_MACHINE_REPO_LABEL = "Devin's machine"
 const DEVIN_GITHUB_COMMENT_MENTION = '@devin-ai-integration'
 const JOBS_STORAGE_KEY = 'minion.jobs.v1'
+const BACKLOG_STORAGE_KEY = 'minion.board_backlog.v1'
+const DONE_CARDS_STORAGE_KEY = 'minion.board_done.v1'
+
+const loadPersistedBacklog = (): BacklogItem[] => {
+  try {
+    const raw = window.localStorage.getItem(BACKLOG_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as BacklogItem[]) : []
+  } catch {
+    return []
+  }
+}
+
+const savePersistedBacklog = (items: BacklogItem[]) => {
+  try {
+    window.localStorage.setItem(BACKLOG_STORAGE_KEY, JSON.stringify(items))
+  } catch {}
+}
+
+const loadPersistedDoneCards = (): BoardCard[] => {
+  try {
+    const raw = window.localStorage.getItem(DONE_CARDS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as BoardCard[]) : []
+  } catch {
+    return []
+  }
+}
+
+const savePersistedDoneCards = (cards: BoardCard[]) => {
+  try {
+    window.localStorage.setItem(DONE_CARDS_STORAGE_KEY, JSON.stringify(cards.slice(0, 50)))
+  } catch {}
+}
+
+const BOARD_COLUMN_LABELS: Record<BoardColumnId, string> = {
+  inbox: 'Inbox',
+  inReview: 'In Review',
+  blocked: 'Blocked',
+  backlog: 'Backlog',
+  done: 'Done',
+}
+
+const BOARD_COLUMN_ORDER: BoardColumnId[] = ['inbox', 'inReview', 'blocked', 'backlog', 'done']
 
 const loadPersistedJobs = (): JobEntry[] => {
   try {
@@ -1303,6 +1377,83 @@ const getSwipeToast = (
   return `PR #${card.id} closed without merge.`
 }
 
+function BoardDroppableColumn({
+  columnId,
+  label,
+  count,
+  showAddButton,
+  onAddClick,
+  children,
+}: {
+  columnId: BoardColumnId
+  label: string
+  count: number
+  showAddButton?: boolean
+  onAddClick?: () => void
+  children: React.ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: columnId })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`board-column ${isOver ? 'board-column-over' : ''}`.trim()}
+      data-column={columnId}
+    >
+      <div className="board-column-header">
+        <span className="board-column-title">{label}</span>
+        <span className="board-column-count">{count}</span>
+        {showAddButton ? (
+          <button
+            type="button"
+            className="board-column-add"
+            onClick={onAddClick}
+            aria-label={`Add item to ${label}`}
+          >
+            <Plus size={14} />
+          </button>
+        ) : null}
+      </div>
+      <div className="board-column-cards hide-scrollbar">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function BoardDraggableCard({
+  card,
+  children,
+}: {
+  card: BoardCard
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: card.uniqueId,
+    data: card,
+  })
+
+  const style: React.CSSProperties = transform
+    ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 100 : 'auto',
+      }
+    : {}
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className="board-card-wrapper"
+    >
+      {children}
+    </div>
+  )
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('code')
   const [issues, setIssues] = useState<IssueCard[]>([])
@@ -1390,6 +1541,17 @@ function App() {
   const [mergeConflictResolutionLookup, setMergeConflictResolutionLookup] = useState<
     Record<string, 'running' | 'resolved'>
   >({})
+  const [isBoardViewActive, setIsBoardViewActive] = useState(false)
+  const [backlogItems, setBacklogItems] = useState<BacklogItem[]>(() => loadPersistedBacklog())
+  const [doneCards, setDoneCards] = useState<BoardCard[]>(() => loadPersistedDoneCards())
+  const [isBoardCreateModalOpen, setIsBoardCreateModalOpen] = useState(false)
+  const [boardCreateTargetColumn, setBoardCreateTargetColumn] = useState<'inbox' | 'backlog'>('inbox')
+  const [boardCreateRepo, setBoardCreateRepo] = useState('')
+  const [boardCreateTitle, setBoardCreateTitle] = useState('')
+  const [boardCreateBody, setBoardCreateBody] = useState('')
+  const [boardCreateLabels, setBoardCreateLabels] = useState('')
+  const [isCreatingBoardIssue, setIsCreatingBoardIssue] = useState(false)
+  const [boardDragActiveId, setBoardDragActiveId] = useState<string | null>(null)
   const pointerIdRef = useRef<number | null>(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const dragOffsetRef = useRef({ x: 0, y: 0 })
@@ -1537,6 +1699,91 @@ function App() {
       isLoadingDevinSession ||
       shouldAutoSyncStartup)
   const shouldShowCredentialSetup = !hasActiveGithubFeed && !showStartupLoadingState
+  const showBoardView = isBoardViewActive && isDesktopLayout && hasActiveGithubFeed
+
+  const boardColumns = useMemo(() => {
+    const inbox: BoardCard[] = []
+    const inReview: BoardCard[] = []
+    const blocked: BoardCard[] = []
+    const backlog: BoardCard[] = []
+    const done: BoardCard[] = [...doneCards]
+
+    issues.forEach((issue) => {
+      const key = toIssueAssessmentKey(issue)
+      const isAssessed = Boolean(key && assessedIssueLookup[key] !== undefined)
+
+      const card: BoardCard = {
+        uniqueId: `issue-${issue.repo}-${issue.id}`,
+        kind: 'issue',
+        id: issue.id,
+        title: issue.title,
+        repo: issue.repo,
+        avatarUrl: issue.avatarUrl,
+        columnId: 'inbox',
+        sourceCard: issue,
+      }
+
+      if (isAssessed) {
+        card.columnId = 'inReview'
+        inReview.push(card)
+      } else {
+        inbox.push(card)
+      }
+    })
+
+    pullRequests.forEach((pr) => {
+      const key = toIssueAssessmentKey(pr)
+      const isAssessed = Boolean(key && assessedPrLookup[key] !== undefined)
+      const hasConflict = Boolean(key && mergeConflictLookup[key] !== undefined)
+      const hasFailingChecks = pr.checks.some((check) => !check.passed)
+
+      const card: BoardCard = {
+        uniqueId: `pr-${pr.repo}-${pr.id}`,
+        kind: 'pullRequest',
+        id: pr.id,
+        title: pr.title,
+        repo: pr.repo,
+        avatarUrl: pr.avatarUrl,
+        columnId: 'inbox',
+        sourceCard: pr,
+      }
+
+      if (hasConflict || hasFailingChecks) {
+        card.columnId = 'blocked'
+        blocked.push(card)
+      } else if (isAssessed) {
+        card.columnId = 'inReview'
+        inReview.push(card)
+      } else {
+        inbox.push(card)
+      }
+    })
+
+    backlogItems.forEach((item) => {
+      backlog.push({
+        uniqueId: `backlog-${item.localId}`,
+        kind: 'backlog',
+        id: 0,
+        title: item.title,
+        repo: item.repo || 'Local',
+        avatarUrl: '',
+        columnId: 'backlog',
+        backlogItem: item,
+      })
+    })
+
+    return { inbox, inReview, blocked, backlog, done }
+  }, [issues, pullRequests, assessedIssueLookup, assessedPrLookup, mergeConflictLookup, backlogItems, doneCards])
+
+  const boardDragActiveCard = useMemo(() => {
+    if (!boardDragActiveId) return null
+    for (const col of BOARD_COLUMN_ORDER) {
+      const cards = boardColumns[col]
+      const found = cards.find((c) => c.uniqueId === boardDragActiveId)
+      if (found) return found
+    }
+    return null
+  }, [boardDragActiveId, boardColumns])
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -3757,10 +4004,218 @@ function App() {
   }
 
   const handleDesktopNavTabSelect = (nextTab: TabKey) => {
+    setIsBoardViewActive(false)
     setIsDesktopActivityOpen(false)
     setIsSettingsOpen(false)
     handleTabChange(nextTab)
   }
+
+  const handleBoardNavSelect = () => {
+    setIsBoardViewActive(true)
+    setIsDesktopActivityOpen(false)
+    setIsSettingsOpen(false)
+  }
+
+  const handleBoardDragStart = useCallback((event: DragStartEvent) => {
+    setBoardDragActiveId(String(event.active.id))
+  }, [])
+
+  const handleBoardDragEnd = useCallback((event: DragEndEvent) => {
+    setBoardDragActiveId(null)
+    const { active, over } = event
+    if (!over) return
+
+    const targetColumnId = String(over.id) as BoardColumnId
+    const card = active.data.current as BoardCard | undefined
+    if (!card || card.columnId === targetColumnId) return
+
+    if (targetColumnId === 'done') {
+      if (card.sourceCard) {
+        if (card.kind === 'issue') {
+          setIssues((prev) => prev.filter((i) => !(i.id === card.id && i.repo === card.repo)))
+          void closeGithubIssue(card.repo, card.id).then(() => {
+            addAction(`Close issue #${card.id} on GitHub`, 'success')
+            showToast(`Closed issue #${card.id}`)
+          }).catch(() => {
+            addAction(`Close issue #${card.id} on GitHub`, 'failed')
+            showToast(`Failed to close issue #${card.id}`)
+          })
+        } else if (card.kind === 'pullRequest') {
+          setPullRequests((prev) => prev.filter((p) => !(p.id === card.id && p.repo === card.repo)))
+          void closeGithubPullRequest(card.repo, card.id).then(() => {
+            addAction(`Close PR #${card.id} on GitHub`, 'success')
+            showToast(`Closed PR #${card.id}`)
+          }).catch(() => {
+            addAction(`Close PR #${card.id} on GitHub`, 'failed')
+            showToast(`Failed to close PR #${card.id}`)
+          })
+        }
+      }
+      if (card.kind === 'backlog') {
+        setBacklogItems((prev) => prev.filter((b) => b.localId !== card.backlogItem?.localId))
+      }
+      const doneCard: BoardCard = { ...card, columnId: 'done' }
+      setDoneCards((prev) => [doneCard, ...prev].slice(0, 50))
+      return
+    }
+
+    if (targetColumnId === 'backlog' && card.kind === 'backlog') {
+      return
+    }
+
+    if (targetColumnId === 'inbox' && card.kind === 'backlog' && card.backlogItem) {
+      const item = card.backlogItem
+      if (item.repo && item.title) {
+        setBacklogItems((prev) => prev.filter((b) => b.localId !== item.localId))
+        const newIssue: IssueCard = {
+          kind: 'issue',
+          id: Date.now(),
+          repo: item.repo,
+          author: '',
+          avatarUrl: '',
+          timestamp: new Date().toISOString(),
+          title: item.title,
+          summary: item.body ? [item.body.slice(0, 200)] : [],
+          codeSnippet: '',
+          labels: item.labels,
+        }
+        setIssues((prev) => [...prev, newIssue])
+        showToast(`Moved "${item.title.slice(0, 30)}..." to Inbox`)
+        void createGithubIssueFromBoard(item.repo, item.title, item.body, item.labels)
+      }
+      return
+    }
+
+    showToast(`Moved card to ${BOARD_COLUMN_LABELS[targetColumnId]}`)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleOpenBoardCreateModal = (targetColumn: 'inbox' | 'backlog') => {
+    setBoardCreateTargetColumn(targetColumn)
+    setBoardCreateRepo(targetColumn === 'inbox' ? (availableRepos[0] ?? '') : '')
+    setBoardCreateTitle('')
+    setBoardCreateBody('')
+    setBoardCreateLabels('')
+    setIsBoardCreateModalOpen(true)
+  }
+
+  const createGithubIssueFromBoard = async (
+    repoPath: string,
+    title: string,
+    body: string,
+    labels: string[],
+  ) => {
+    const githubAccessToken = await resolveGithubAccessToken({ silent: true })
+    const authIssue = getGithubFeedAuthIssue(githubAccessToken)
+    if (authIssue) {
+      showToast(authIssue)
+      return
+    }
+
+    const normalizedRepoPath = normalizeRepoPath(repoPath)
+    const [owner, repo] = normalizedRepoPath.split('/')
+    if (!owner || !repo) {
+      showToast(`Invalid repository path: ${repoPath}`)
+      return
+    }
+
+    try {
+      const payload: { title: string; body?: string; labels?: string[] } = { title }
+      if (body.trim()) payload.body = body.trim()
+      if (labels.length > 0) payload.labels = labels
+
+      const response = await fetch(
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${githubAccessToken}`,
+            'Content-Type': 'application/json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+          body: JSON.stringify(payload),
+        },
+      )
+
+      if (!response.ok) {
+        throw new Error(await parseDevinError(response))
+      }
+
+      const created = (await response.json()) as { number?: number; html_url?: string }
+      addAction(`Created issue #${created.number ?? '?'} in ${normalizedRepoPath}`, 'success')
+      showToast(`Issue #${created.number ?? '?'} created in ${normalizedRepoPath}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create issue on GitHub.'
+      addAction(`Create issue failed: ${message}`, 'failed')
+      showToast(`Failed to create issue: ${message}`)
+    }
+  }
+
+  const handleCreateBoardItem = async () => {
+    const title = boardCreateTitle.trim()
+    if (!title) {
+      showToast('Title is required.')
+      return
+    }
+
+    const labels = boardCreateLabels
+      .split(',')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+
+    if (boardCreateTargetColumn === 'backlog') {
+      const newItem: BacklogItem = {
+        localId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        repo: boardCreateRepo,
+        title,
+        body: boardCreateBody.trim(),
+        labels,
+        createdAt: Date.now(),
+      }
+      setBacklogItems((prev) => [newItem, ...prev])
+      setIsBoardCreateModalOpen(false)
+      showToast(`Added "${title.slice(0, 30)}${title.length > 30 ? '...' : ''}" to Backlog`)
+      return
+    }
+
+    const repo = boardCreateRepo.trim()
+    if (!repo) {
+      showToast('Select a repository.')
+      return
+    }
+
+    setIsCreatingBoardIssue(true)
+    try {
+      const newIssue: IssueCard = {
+        kind: 'issue',
+        id: Date.now(),
+        repo,
+        author: githubOauthLogin ?? '',
+        avatarUrl: '',
+        timestamp: new Date().toISOString(),
+        title,
+        summary: boardCreateBody.trim() ? [boardCreateBody.trim().slice(0, 200)] : [],
+        codeSnippet: '',
+        labels,
+      }
+      setIssues((prev) => [...prev, newIssue])
+      setIsBoardCreateModalOpen(false)
+      showToast(`Added "${title.slice(0, 30)}${title.length > 30 ? '...' : ''}" to Inbox`)
+
+      await createGithubIssueFromBoard(repo, title, boardCreateBody.trim(), labels)
+    } finally {
+      setIsCreatingBoardIssue(false)
+    }
+  }
+
+  useEffect(() => {
+    savePersistedBacklog(backlogItems)
+  }, [backlogItems])
+
+  useEffect(() => {
+    savePersistedDoneCards(doneCards)
+  }, [doneCards])
 
   useEffect(() => {
     document.documentElement.dataset.theme = colorTheme
@@ -5079,6 +5534,13 @@ opens a PR.
                 >
                   {desktopPullRequestCountLabel}
                 </button>
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${showBoardView ? 'is-active' : ''}`.trim()}
+                  onClick={handleBoardNavSelect}
+                >
+                  Board
+                </button>
                 {!isDesktopWideLayout ? (
                   <button
                     type="button"
@@ -5236,7 +5698,100 @@ opens a PR.
           ) : null}
 
           <div className="app-main-column">
-            {showDesktopMainActivity ? (
+            {showBoardView ? (
+              <DndContext
+                collisionDetection={pointerWithin}
+                onDragStart={handleBoardDragStart}
+                onDragEnd={handleBoardDragEnd}
+              >
+                <div className={`board-container ${isDesktopWideLayout ? 'board-wide' : ''}`.trim()}>
+                  {BOARD_COLUMN_ORDER.map((colId) => {
+                    const cards = boardColumns[colId]
+                    const showAdd = colId === 'inbox' || colId === 'backlog'
+                    return (
+                      <BoardDroppableColumn
+                        key={colId}
+                        columnId={colId}
+                        label={BOARD_COLUMN_LABELS[colId]}
+                        count={cards.length}
+                        showAddButton={showAdd}
+                        onAddClick={() => handleOpenBoardCreateModal(colId as 'inbox' | 'backlog')}
+                      >
+                        <AnimatePresence>
+                          {cards.map((card) => (
+                            <BoardDraggableCard key={card.uniqueId} card={card}>
+                              <motion.div
+                                layoutId={card.uniqueId}
+                                className="board-card"
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                <div className="board-card-header">
+                                  <span className="board-card-kind">
+                                    {card.kind === 'pullRequest' ? (
+                                      <GitPullRequest size={12} />
+                                    ) : card.kind === 'backlog' ? (
+                                      <FileText size={12} />
+                                    ) : (
+                                      <CircleDot size={12} />
+                                    )}
+                                  </span>
+                                  {card.id > 0 ? (
+                                    <span className="board-card-id">#{card.id}</span>
+                                  ) : null}
+                                  <span className="board-card-repo">{card.repo}</span>
+                                </div>
+                                <div className="board-card-title">
+                                  {card.title.length > 60 ? `${card.title.slice(0, 57)}...` : card.title}
+                                </div>
+                                {card.avatarUrl ? (
+                                  <img
+                                    className="board-card-avatar"
+                                    src={card.avatarUrl}
+                                    alt=""
+                                    width={18}
+                                    height={18}
+                                  />
+                                ) : null}
+                              </motion.div>
+                            </BoardDraggableCard>
+                          ))}
+                        </AnimatePresence>
+                      </BoardDroppableColumn>
+                    )
+                  })}
+                </div>
+
+                {boardDragActiveCard ? (
+                  <div className="board-drag-overlay">
+                    <div className="board-card">
+                      <div className="board-card-header">
+                        <span className="board-card-kind">
+                          {boardDragActiveCard.kind === 'pullRequest' ? (
+                            <GitPullRequest size={12} />
+                          ) : boardDragActiveCard.kind === 'backlog' ? (
+                            <FileText size={12} />
+                          ) : (
+                            <CircleDot size={12} />
+                          )}
+                        </span>
+                        {boardDragActiveCard.id > 0 ? (
+                          <span className="board-card-id">#{boardDragActiveCard.id}</span>
+                        ) : null}
+                        <span className="board-card-repo">{boardDragActiveCard.repo}</span>
+                      </div>
+                      <div className="board-card-title">
+                        {boardDragActiveCard.title.length > 60
+                          ? `${boardDragActiveCard.title.slice(0, 57)}...`
+                          : boardDragActiveCard.title}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </DndContext>
+            ) : showDesktopMainActivity ? (
               renderActivityPanel('desktop-main-activity')
             ) : (
               <>
@@ -6018,6 +6573,107 @@ opens a PR.
                 {renderActivityPanelViewContent({ closeOnLinkClick: true })}
               </motion.div>
             </motion.aside>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isBoardCreateModalOpen ? (
+          <motion.div
+            className="board-modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsBoardCreateModalOpen(false)}
+          >
+            <motion.div
+              className="board-modal"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="board-modal-header">
+                <h3 className="board-modal-title">
+                  {boardCreateTargetColumn === 'backlog' ? 'New Backlog Item' : 'New Issue'}
+                </h3>
+                <button
+                  type="button"
+                  className="board-modal-close"
+                  onClick={() => setIsBoardCreateModalOpen(false)}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="board-modal-body">
+                <label className="board-modal-label">
+                  Repository
+                  <select
+                    className="board-modal-select"
+                    value={boardCreateRepo}
+                    onChange={(e) => setBoardCreateRepo(e.target.value)}
+                  >
+                    {boardCreateTargetColumn === 'backlog' ? (
+                      <option value="">None (local only)</option>
+                    ) : null}
+                    {availableRepos.map((repo) => (
+                      <option key={repo} value={repo}>{repo}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="board-modal-label">
+                  Title
+                  <input
+                    type="text"
+                    className="board-modal-input"
+                    value={boardCreateTitle}
+                    onChange={(e) => setBoardCreateTitle(e.target.value)}
+                    placeholder="Issue title"
+                    autoFocus
+                  />
+                </label>
+                <label className="board-modal-label">
+                  Body
+                  <textarea
+                    className="board-modal-textarea"
+                    value={boardCreateBody}
+                    onChange={(e) => setBoardCreateBody(e.target.value)}
+                    placeholder="Description (optional)"
+                    rows={4}
+                  />
+                </label>
+                <label className="board-modal-label">
+                  Labels
+                  <input
+                    type="text"
+                    className="board-modal-input"
+                    value={boardCreateLabels}
+                    onChange={(e) => setBoardCreateLabels(e.target.value)}
+                    placeholder="Comma-separated labels (optional)"
+                  />
+                </label>
+              </div>
+              <div className="board-modal-footer">
+                <button
+                  type="button"
+                  className="board-modal-cancel"
+                  onClick={() => setIsBoardCreateModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="board-modal-submit"
+                  onClick={() => void handleCreateBoardItem()}
+                  disabled={isCreatingBoardIssue}
+                >
+                  {isCreatingBoardIssue ? (
+                    <span className="spinner" aria-hidden="true" />
+                  ) : boardCreateTargetColumn === 'backlog' ? 'Add to Backlog' : 'Create Issue'}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         ) : null}
       </AnimatePresence>
