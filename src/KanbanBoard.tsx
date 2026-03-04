@@ -160,13 +160,15 @@ const deriveColumn = (
   // Check actions for this card
   const cardActions = actionStream.filter((a) => {
     const lower = a.label.toLowerCase()
-    return lower.includes(`#${card.id}`)
+    const pattern = new RegExp(`#${card.id}(?!\\d)`)
+    return pattern.test(lower)
   })
 
   // Check jobs for this card
   const cardJobs = jobs.filter((j) => {
     const target = j.target.toLowerCase()
-    return target.includes(`#${card.id}`)
+    const pattern = new RegExp(`#${card.id}(?!\\d)`)
+    return pattern.test(target)
   })
 
   // If there's a successful close or merge action, it's done
