@@ -1340,9 +1340,9 @@ function App() {
   const [activityPanelView, setActivityPanelView] = useState<'sessions' | 'actions'>('sessions')
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
-  const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
+  const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora' | 'claude'>(
     () =>
-      (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
+      (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora' | 'claude') ??
       'dark',
   )
   const [devinApiKey, setDevinApiKey] = useState('')
@@ -4563,6 +4563,13 @@ opens a PR.
           onClick={() => setColorTheme('aurora')}
         >
           Aurora
+        </button>
+        <button
+          type="button"
+          className={`theme-option${colorTheme === 'claude' ? ' is-active' : ''}`}
+          onClick={() => setColorTheme('claude')}
+        >
+          Claude
         </button>
       </div>
     </div>
