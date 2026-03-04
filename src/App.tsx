@@ -16,8 +16,9 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
+import KanbanBoard from './KanbanBoard'
 
-type TabKey = 'issues' | 'pullRequests' | 'code'
+type TabKey = 'issues' | 'pullRequests' | 'code' | 'board'
 type SwipeDirection = 'left' | 'right' | 'down'
 
 interface BaseCard {
@@ -1495,11 +1496,11 @@ function App() {
     isDesktopLayout && hasActiveGithubFeed ? `PRs (${pullRequests.length})` : 'PRs'
   const desktopSwipeTab: TabKey = activeTab === 'issues' ? 'issues' : 'pullRequests'
   const desktopLeftSwipeAction =
-    activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'left')
+    activeTab === 'code' || activeTab === 'board' ? null : getSwipeAction(desktopSwipeTab, 'left')
   const desktopRightSwipeAction =
-    activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'right')
+    activeTab === 'code' || activeTab === 'board' ? null : getSwipeAction(desktopSwipeTab, 'right')
   const desktopDownSwipeAction =
-    activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'down')
+    activeTab === 'code' || activeTab === 'board' ? null : getSwipeAction(desktopSwipeTab, 'down')
   const showDesktopLeftNav = isDesktopLayout && hasActiveGithubFeed
   const showDesktopWideRail = showDesktopLeftNav && isDesktopWideLayout
   const showDesktopRightRail = showDesktopLeftNav && (showDesktopWideRail || isSettingsOpen)
@@ -1510,6 +1511,7 @@ function App() {
     isDesktopLayout &&
     hasActiveGithubFeed &&
     activeTab !== 'code' &&
+    activeTab !== 'board' &&
     !showDesktopMainActivity &&
     Boolean(topCard)
   const hasApiKey = hasDevinSession || devinApiKey.trim().length > 0
@@ -2162,6 +2164,57 @@ function App() {
           ? payload.message.trim()
           : `GitHub could not merge PR #${pullNumber}.`
       throw new Error(message)
+    }
+  }
+
+  const createGithubIssue = async (
+    repoPath: string,
+    title: string,
+    body: string,
+    labels: string[],
+  ) => {
+    const githubAccessToken = await resolveGithubAccessToken({ silent: true })
+    const authIssue = getGithubFeedAuthIssue(githubAccessToken)
+    if (authIssue) {
+      throw new Error(authIssue)
+    }
+
+    const normalizedRepoPath = normalizeRepoPath(repoPath)
+    const [owner, repo] = normalizedRepoPath.split('/')
+    if (!owner || !repo) {
+      throw new Error(`Invalid repository path: ${repoPath}`)
+    }
+
+    const payload: Record<string, unknown> = { title: title.trim() }
+    if (body.trim().length > 0) {
+      payload.body = body.trim()
+    }
+    if (labels.length > 0) {
+      payload.labels = labels
+    }
+
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`,
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${githubAccessToken}`,
+          'Content-Type': 'application/json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        body: JSON.stringify(payload),
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(await parseDevinError(response))
+    }
+
+    const created = (await response.json()) as { number?: number; title?: string }
+    const issueNumber = created.number
+    if (typeof issueNumber === 'number') {
+      addAction(`Created issue #${issueNumber} in ${normalizedRepoPath}`, 'success')
     }
   }
 
@@ -5079,6 +5132,13 @@ opens a PR.
                 >
                   {desktopPullRequestCountLabel}
                 </button>
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${!showDesktopMainActivity && activeTab === 'board' ? 'is-active' : ''}`.trim()}
+                  onClick={() => handleDesktopNavTabSelect('board')}
+                >
+                  Board
+                </button>
                 {!isDesktopWideLayout ? (
                   <button
                     type="button"
@@ -5358,7 +5418,26 @@ opens a PR.
                   )
                 ) : null}
       {hasActiveGithubFeed ? (
-        activeTab === 'code' ? (
+        activeTab === 'board' ? (
+          <section className="deck-shell" key="tab-board">
+            <div className="deck-frame" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: '1 1 auto' }}>
+              <KanbanBoard
+                issues={issues}
+                pullRequests={pullRequests}
+                actionStream={actionStream}
+                jobs={jobs}
+                mergeConflictLookup={mergeConflictLookup}
+                availableRepos={availableRepos}
+                isWideLayout={isDesktopWideLayout}
+                onSwipeAction={(tab, direction, card) => {
+                  void runSwipeSideEffect(tab, direction, card)
+                }}
+                onCreateIssue={createGithubIssue}
+                onShowToast={(message) => showToast(message)}
+              />
+            </div>
+          </section>
+        ) : activeTab === 'code' ? (
           <section className="deck-shell" key="tab-code">
             <div className="deck-frame">{renderReposPanel()}</div>
           </section>
