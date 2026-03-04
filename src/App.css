@@ -3455,7 +3455,8 @@
 .board-container {
   display: flex;
   gap: 12px;
-  height: 100%;
+  flex: 1 1 0%;
+  min-height: 0;
   padding: 12px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -3470,7 +3471,9 @@
   display: flex;
   flex-direction: column;
   min-width: 220px;
+  max-width: 320px;
   flex: 1 1 0%;
+  min-height: 0;
   background: var(--color-card-bg, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
   border-radius: 12px;
@@ -3609,12 +3612,10 @@
   height: 18px;
 }
 
-.board-drag-overlay {
-  position: fixed;
-  pointer-events: none;
-  z-index: 1000;
-  top: 0;
-  left: 0;
+.board-card-overlay {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+  cursor: grabbing;
 }
 
 /* ── Board Create Modal ── */

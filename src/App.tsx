@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
-import { DndContext, useDroppable, useDraggable, pointerWithin } from '@dnd-kit/core'
+import { DndContext, DragOverlay, useDroppable, useDraggable, pointerWithin } from '@dnd-kit/core'
 import type { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
 
 type TabKey = 'issues' | 'pullRequests' | 'code'
@@ -4079,9 +4079,14 @@ function App() {
           codeSnippet: '',
           labels: item.labels,
         }
+        const tempId = newIssue.id
         setIssues((prev) => [...prev, newIssue])
         showToast(`Moved "${item.title.slice(0, 30)}..." to Inbox`)
-        void createGithubIssueFromBoard(item.repo, item.title, item.body, item.labels)
+        void createGithubIssueFromBoard(item.repo, item.title, item.body, item.labels).then((realNumber) => {
+          if (realNumber) {
+            setIssues((prev) => prev.map((i) => i.id === tempId && i.repo === item.repo ? { ...i, id: realNumber } : i))
+          }
+        })
       }
       return
     }
@@ -4104,19 +4109,19 @@ function App() {
     title: string,
     body: string,
     labels: string[],
-  ) => {
+  ): Promise<number | null> => {
     const githubAccessToken = await resolveGithubAccessToken({ silent: true })
     const authIssue = getGithubFeedAuthIssue(githubAccessToken)
     if (authIssue) {
       showToast(authIssue)
-      return
+      return null
     }
 
     const normalizedRepoPath = normalizeRepoPath(repoPath)
     const [owner, repo] = normalizedRepoPath.split('/')
     if (!owner || !repo) {
       showToast(`Invalid repository path: ${repoPath}`)
-      return
+      return null
     }
 
     try {
@@ -4143,12 +4148,15 @@ function App() {
       }
 
       const created = (await response.json()) as { number?: number; html_url?: string }
-      addAction(`Created issue #${created.number ?? '?'} in ${normalizedRepoPath}`, 'success')
-      showToast(`Issue #${created.number ?? '?'} created in ${normalizedRepoPath}`)
+      const realNumber = created.number ?? null
+      addAction(`Created issue #${realNumber ?? '?'} in ${normalizedRepoPath}`, 'success')
+      showToast(`Issue #${realNumber ?? '?'} created in ${normalizedRepoPath}`)
+      return realNumber
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create issue on GitHub.'
       addAction(`Create issue failed: ${message}`, 'failed')
       showToast(`Failed to create issue: ${message}`)
+      return null
     }
   }
 
@@ -4199,11 +4207,15 @@ function App() {
         codeSnippet: '',
         labels,
       }
+      const tempId = newIssue.id
       setIssues((prev) => [...prev, newIssue])
       setIsBoardCreateModalOpen(false)
       showToast(`Added "${title.slice(0, 30)}${title.length > 30 ? '...' : ''}" to Inbox`)
 
-      await createGithubIssueFromBoard(repo, title, boardCreateBody.trim(), labels)
+      const realNumber = await createGithubIssueFromBoard(repo, title, boardCreateBody.trim(), labels)
+      if (realNumber) {
+        setIssues((prev) => prev.map((i) => i.id === tempId && i.repo === repo ? { ...i, id: realNumber } : i))
+      }
     } finally {
       setIsCreatingBoardIssue(false)
     }
@@ -5764,9 +5776,9 @@ opens a PR.
                   })}
                 </div>
 
-                {boardDragActiveCard ? (
-                  <div className="board-drag-overlay">
-                    <div className="board-card">
+                <DragOverlay dropAnimation={null}>
+                  {boardDragActiveCard ? (
+                    <div className="board-card board-card-overlay">
                       <div className="board-card-header">
                         <span className="board-card-kind">
                           {boardDragActiveCard.kind === 'pullRequest' ? (
@@ -5788,8 +5800,8 @@ opens a PR.
                           : boardDragActiveCard.title}
                       </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </DragOverlay>
               </DndContext>
             ) : showDesktopMainActivity ? (
               renderActivityPanel('desktop-main-activity')
