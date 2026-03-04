@@ -3082,6 +3082,252 @@
   background: rgba(255, 255, 230, 0.14);
 }
 
+[data-theme="among-us"] {
+  --bg-main: #1a1a2e;
+  --bg-elevated: #1a1a2e;
+  --border-subtle: rgba(157, 231, 255, 0.22);
+  --accent-primary: #c51111;
+  --accent-highlight: #9de7ff;
+  --status-success: #9de7ff;
+  --text-primary: #ffffff;
+  --text-muted: #b0b8c8;
+  --text-dim: rgba(157, 231, 255, 0.52);
+  --shadow-soft: 0 10px 20px rgba(0, 0, 0, 0.42);
+  --shadow-card: 0 6px 14px rgba(0, 0, 0, 0.44);
+}
+
+[data-theme="among-us"] .auth-panel,
+[data-theme="among-us"] .code-panel,
+[data-theme="among-us"] .empty-state,
+[data-theme="among-us"] .comment-modal,
+[data-theme="among-us"] .job-item,
+[data-theme="among-us"] .action-item,
+[data-theme="among-us"] .repo-list-item,
+[data-theme="among-us"] .code-filter-empty,
+[data-theme="among-us"] .code-empty-state,
+[data-theme="among-us"] .card-scroll-content,
+[data-theme="among-us"] .card-content-toggle,
+[data-theme="among-us"] .code-snippet,
+[data-theme="among-us"] .job-session-link,
+[data-theme="among-us"] .fab-button,
+[data-theme="among-us"] .jobs-button,
+[data-theme="among-us"] .top-toggle,
+[data-theme="among-us"] .theme-toggle-row,
+[data-theme="among-us"] .toast,
+[data-theme="among-us"] .jobs-drawer,
+[data-theme="among-us"] .settings-drawer,
+[data-theme="among-us"] .swipe-card,
+[data-theme="among-us"] .repo-filter-input,
+[data-theme="among-us"] .repo-request-input,
+[data-theme="among-us"] .auth-field input,
+[data-theme="among-us"] .skeleton-card,
+[data-theme="among-us"] .skeleton-scroll-block,
+[data-theme="among-us"] .skeleton-action,
+[data-theme="among-us"] .startup-skeleton-frame::before,
+[data-theme="among-us"] .startup-skeleton-frame::after,
+[data-theme="among-us"] .swipe-overlay.tone-neutral,
+[data-theme="among-us"] .overlay-chip {
+  background: #1a1a2e;
+}
+
+[data-theme="among-us"] .swipe-card,
+[data-theme="among-us"] .card-scroll-content,
+[data-theme="among-us"] .code-snippet,
+[data-theme="among-us"] .code-panel,
+[data-theme="among-us"] .auth-panel,
+[data-theme="among-us"] .comment-modal,
+[data-theme="among-us"] .job-item,
+[data-theme="among-us"] .action-item,
+[data-theme="among-us"] .code-filter-empty,
+[data-theme="among-us"] .code-empty-state,
+[data-theme="among-us"] .repo-list-item {
+  background: linear-gradient(180deg, #1a1a2e 0%, #16162a 100%);
+}
+
+[data-theme="among-us"] .fab-button,
+[data-theme="among-us"] .jobs-button,
+[data-theme="among-us"] .job-item,
+[data-theme="among-us"] .action-item,
+[data-theme="among-us"] .repo-list-item,
+[data-theme="among-us"] .job-session-link,
+[data-theme="among-us"] .card-scroll-content,
+[data-theme="among-us"] .card-content-toggle,
+[data-theme="among-us"] .code-snippet,
+[data-theme="among-us"] .code-filter-empty,
+[data-theme="among-us"] .code-empty-state,
+[data-theme="among-us"] .toast,
+[data-theme="among-us"] .auth-panel,
+[data-theme="among-us"] .code-panel,
+[data-theme="among-us"] .comment-modal,
+[data-theme="among-us"] .skeleton-scroll-block,
+[data-theme="among-us"] .overlay-chip {
+  border-color: rgba(157, 231, 255, 0.22);
+}
+
+[data-theme="among-us"] .jobs-button:hover:not(:disabled),
+[data-theme="among-us"] .jobs-close:hover,
+[data-theme="among-us"] .job-item:hover {
+  background: #1a1a2e;
+  border-color: rgba(157, 231, 255, 0.48);
+  color: #ffffff;
+}
+
+[data-theme="among-us"] .top-toggle button.is-active,
+[data-theme="among-us"] .theme-option.is-active,
+[data-theme="among-us"] .card-content-toggle-button.is-active {
+  background: rgba(197, 17, 17, 0.18);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(197, 17, 17, 0.6);
+}
+
+[data-theme="among-us"] .card-content-toggle,
+[data-theme="among-us"] .card-scroll-content,
+[data-theme="among-us"] .code-snippet {
+  border-color: transparent;
+}
+
+[data-theme="among-us"] .repo-list-item.is-selected {
+  background: #1a1a2e;
+  border-color: rgba(197, 17, 17, 0.6);
+  color: #ffffff;
+}
+
+[data-theme="among-us"] .fab-button,
+[data-theme="among-us"] .fab-button.primary,
+[data-theme="among-us"] .fab-button.secondary,
+[data-theme="among-us"] .fab-button.success,
+[data-theme="among-us"] .fab-button.danger,
+[data-theme="among-us"] .fab-button.assess-button,
+[data-theme="among-us"] .fab-button.pr-assess-action,
+[data-theme="among-us"] .job-pr-link {
+  background: #1a1a2e;
+  color: #ffffff;
+  border-color: rgba(157, 231, 255, 0.3);
+  box-shadow: none;
+  text-shadow: none;
+}
+
+[data-theme="among-us"] .fab-button.primary,
+[data-theme="among-us"] .fab-button.assess-button,
+[data-theme="among-us"] .fab-button.pr-assess-action,
+[data-theme="among-us"] .fab-button.success,
+[data-theme="among-us"] .job-pr-link {
+  border-color: rgba(197, 17, 17, 0.7);
+  background: rgba(197, 17, 17, 0.14);
+  color: #ffffff;
+}
+
+[data-theme="among-us"] .fab-button.primary.repo-request-button:not(:disabled) svg,
+[data-theme="among-us"] .fab-button.primary.reviewed-pr-link svg {
+  filter: none;
+}
+
+[data-theme="among-us"] .fab-button.primary.repo-request-button:disabled {
+  background: #1a1a2e;
+  border-color: rgba(157, 231, 255, 0.18);
+  color: rgba(176, 184, 200, 0.56);
+}
+
+[data-theme="among-us"] .jobs-count-badge {
+  background: #1a1a2e;
+  border-color: rgba(157, 231, 255, 0.36);
+  color: #b0b8c8;
+}
+
+[data-theme="among-us"] .jobs-button.has-running-jobs,
+[data-theme="among-us"] .jobs-button.has-running-jobs .jobs-count-badge {
+  color: #9de7ff;
+  border-color: rgba(157, 231, 255, 0.52);
+}
+
+[data-theme="among-us"] .fab-button.danger,
+[data-theme="among-us"] .ci-status.conflict {
+  border-color: rgba(197, 17, 17, 0.7);
+  color: #c51111;
+}
+
+[data-theme="among-us"] .code-token.diffAdd {
+  color: #9de7ff;
+  background: rgba(157, 231, 255, 0.12);
+  box-shadow: inset 2px 0 0 rgba(157, 231, 255, 0.5);
+}
+
+[data-theme="among-us"] .code-token.diffRemove {
+  color: #c51111;
+  background: rgba(197, 17, 17, 0.12);
+  box-shadow: inset 2px 0 0 rgba(197, 17, 17, 0.46);
+}
+
+[data-theme="among-us"] .code-token.diffMeta {
+  color: rgba(157, 231, 255, 0.82);
+}
+
+[data-theme="among-us"] .diff-remove,
+[data-theme="among-us"] .check-pill.pending,
+[data-theme="among-us"] .ci-status.failed {
+  color: #b0b8c8;
+}
+
+[data-theme="among-us"] .drawer-backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+[data-theme="among-us"] .jobs-drawer,
+[data-theme="among-us"] .settings-drawer,
+[data-theme="among-us"] .toast {
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.48);
+}
+
+[data-theme="among-us"] .toast-undo-button,
+[data-theme="among-us"] .toast-dismiss-button {
+  color: rgba(157, 231, 255, 0.84);
+}
+
+[data-theme="among-us"] .toast-dismiss-button {
+  color: rgba(157, 231, 255, 0.58);
+}
+
+[data-theme="among-us"] .toast-undo-button:hover,
+[data-theme="among-us"] .toast-dismiss-button:hover {
+  background: rgba(157, 231, 255, 0.1);
+  color: #9de7ff;
+}
+
+[data-theme="among-us"] .toast-undo-button:focus-visible,
+[data-theme="among-us"] .toast-dismiss-button:focus-visible {
+  outline-color: rgba(157, 231, 255, 0.46);
+  background: rgba(157, 231, 255, 0.1);
+  color: #9de7ff;
+}
+
+[data-theme="among-us"] .skeleton-avatar,
+[data-theme="among-us"] .skeleton-line,
+[data-theme="among-us"] .skeleton-pill {
+  background: rgba(197, 17, 17, 0.18);
+}
+
+[data-theme="among-us"] .repo-name,
+[data-theme="among-us"] .repo-name:visited {
+  color: #9de7ff;
+}
+
+[data-theme="among-us"] .spinner {
+  border-color: rgba(157, 231, 255, 0.2);
+  border-top-color: #c51111;
+}
+
+[data-theme="among-us"] .swipe-overlay.tone-accent {
+  background: rgba(197, 17, 17, 0.88);
+}
+
+[data-theme="among-us"] .swipe-overlay.tone-highlight {
+  background: rgba(157, 231, 255, 0.88);
+}
+
+[data-theme="among-us"] .swipe-overlay.tone-danger {
+  background: rgba(197, 17, 17, 0.88);
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
