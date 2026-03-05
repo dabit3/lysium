@@ -13,6 +13,7 @@ import {
   Rocket,
   RefreshCw,
   Github,
+  Plus,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -1326,6 +1327,11 @@ function App() {
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false)
   const [commentBody, setCommentBody] = useState('')
   const [isPostingComment, setIsPostingComment] = useState(false)
+  const [isCreateIssueModalOpen, setIsCreateIssueModalOpen] = useState(false)
+  const [createIssueRepo, setCreateIssueRepo] = useState('')
+  const [createIssueTitle, setCreateIssueTitle] = useState('')
+  const [createIssueBody, setCreateIssueBody] = useState('')
+  const [isCreatingIssue, setIsCreatingIssue] = useState(false)
   const [jobs, setJobs] = useState<JobEntry[]>(() => loadPersistedJobs())
   const [actionStream, setActionStream] = useState<ActionEntry[]>([])
   const [isJobsOpen, setIsJobsOpen] = useState(false)
@@ -2081,6 +2087,52 @@ function App() {
     if (!response.ok) {
       throw new Error(await parseDevinError(response))
     }
+  }
+
+  const createGithubIssue = async (repoPath: string, title: string, body: string) => {
+    const githubAccessToken = await resolveGithubAccessToken({ silent: true })
+    const authIssue = getGithubFeedAuthIssue(githubAccessToken)
+    if (authIssue) {
+      throw new Error(authIssue)
+    }
+
+    const issueTitle = title.trim()
+    if (!issueTitle) {
+      throw new Error('Issue title cannot be empty.')
+    }
+
+    const normalizedRepoPath = normalizeRepoPath(repoPath)
+    const [owner, repo] = normalizedRepoPath.split('/')
+    if (!owner || !repo) {
+      throw new Error(`Invalid repository path: ${repoPath}`)
+    }
+
+    const payload: { title: string; body?: string } = { title: issueTitle }
+    const issueBody = body.trim()
+    if (issueBody) {
+      payload.body = issueBody
+    }
+
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`,
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${githubAccessToken}`,
+          'Content-Type': 'application/json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        body: JSON.stringify(payload),
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(await parseDevinError(response))
+    }
+
+    const data = (await response.json()) as { number?: number; html_url?: string }
+    return data
   }
 
   const closeGithubPullRequest = async (repoPath: string, pullNumber: number) => {
@@ -3553,6 +3605,65 @@ function App() {
     }
   }
 
+  const handleOpenCreateIssueModal = () => {
+    setCreateIssueRepo(githubSearchScope.replace(/^(user|org):/, '').trim() ? '' : '')
+    setCreateIssueTitle('')
+    setCreateIssueBody('')
+    setIsCreateIssueModalOpen(true)
+  }
+
+  const handleSubmitCreateIssue = async () => {
+    const repo = createIssueRepo.trim()
+    if (!repo) {
+      showToast('Enter a repository (e.g. owner/repo).')
+      return
+    }
+
+    const title = createIssueTitle.trim()
+    if (!title) {
+      showToast('Enter an issue title.')
+      return
+    }
+
+    setIsCreatingIssue(true)
+    setIsCreateIssueModalOpen(false)
+    const actionId = addAction(`Create issue on ${repo}`, 'pending')
+    const jobId = addJob('Create Issue', repo)
+    showToast('Creating issue...')
+
+    try {
+      const data = await createGithubIssue(repo, title, createIssueBody)
+      const issueNumber = data.number
+      const issueUrl = typeof data.html_url === 'string' ? data.html_url : undefined
+      updateJob(jobId, {
+        status: 'success',
+        message: issueNumber
+          ? `Issue #${issueNumber} created on ${repo}.`
+          : `Issue created on ${repo}.`,
+        retryable: false,
+        pullRequestUrl: issueUrl,
+      })
+      updateAction(actionId, { outcome: 'success' })
+      showToast(
+        issueNumber ? `Issue #${issueNumber} created.` : 'Issue created.',
+      )
+      setCreateIssueRepo('')
+      setCreateIssueTitle('')
+      setCreateIssueBody('')
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to create issue on GitHub.'
+      updateJob(jobId, {
+        status: 'failed',
+        message: `Create issue failed: ${message}`,
+      })
+      updateAction(actionId, { outcome: 'failed' })
+      showToast(`Failed to create issue: ${message}`)
+    } finally {
+      setIsCreatingIssue(false)
+    }
+  }
+
   const handleRetryJob = async (jobId: number) => {
     const job = jobs.find((entry) => entry.id === jobId)
     if (!job || job.status !== 'failed' || !job.retryable || !job.retryPrompt) {
@@ -3880,6 +3991,7 @@ function App() {
         event.ctrlKey ||
         event.altKey ||
         isCommentModalOpen ||
+        isCreateIssueModalOpen ||
         isEditableTarget(event.target) ||
         !canTriggerDesktopSwipe
       ) {
@@ -3913,6 +4025,7 @@ function App() {
     commitSwipe,
     hasActiveGithubFeed,
     isCommentModalOpen,
+    isCreateIssueModalOpen,
     isDesktopLayout,
   ])
 
@@ -5162,6 +5275,14 @@ opens a PR.
                         <MessageSquarePlus size={16} />
                         <span>Comment</span>
                       </button>
+                      <button
+                        type="button"
+                        className="fab-button secondary desktop-swipe-button"
+                        onClick={handleOpenCreateIssueModal}
+                      >
+                        <Plus size={16} />
+                        <span>New Issue</span>
+                      </button>
                     </>
                   ) : null}
                   {activeTab === 'pullRequests' && !isActivePullRequestInMergeConflict && !isActivePullRequestConflictResolved ? (
@@ -5666,6 +5787,13 @@ opens a PR.
                 >
                   <MessageSquarePlus size={16} /> Comment
                 </button>
+                <button
+                  type="button"
+                  className="fab-button secondary"
+                  onClick={handleOpenCreateIssueModal}
+                >
+                  <Plus size={16} /> New Issue
+                </button>
               </div>
             ) : (
               <div
@@ -5876,6 +6004,91 @@ opens a PR.
                     <span className="spinner" aria-hidden="true" />
                   ) : null}
                   <span>Post Comment</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isCreateIssueModalOpen ? (
+          <motion.div
+            key="create-issue-modal-backdrop"
+            className="modal-backdrop"
+            onClick={() => setIsCreateIssueModalOpen(false)}
+            role="presentation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={drawerBackdropTransition}
+          >
+            <motion.div
+              className="comment-modal create-issue-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Create new issue"
+              onClick={(event) => event.stopPropagation()}
+              initial={commentModalInitial}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ ...commentModalExit, transition: commentModalExitTransition }}
+              transition={commentModalTransition}
+            >
+              <h3>New Issue</h3>
+              <p className="modal-caption">Create a new issue on GitHub</p>
+
+              <input
+                type="text"
+                className="create-issue-input"
+                value={createIssueRepo}
+                onChange={(event) => setCreateIssueRepo(event.target.value)}
+                placeholder="Repository (e.g. owner/repo)"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+              />
+
+              <input
+                type="text"
+                className="create-issue-input"
+                value={createIssueTitle}
+                onChange={(event) => setCreateIssueTitle(event.target.value)}
+                placeholder="Issue title"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+              />
+
+              <textarea
+                value={createIssueBody}
+                onChange={(event) => setCreateIssueBody(event.target.value)}
+                placeholder="Issue description (optional, supports Markdown)"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+              />
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="fab-button secondary"
+                  onClick={() => setIsCreateIssueModalOpen(false)}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  className="fab-button primary"
+                  onClick={() => {
+                    void handleSubmitCreateIssue()
+                  }}
+                  disabled={isCreatingIssue}
+                >
+                  {isCreatingIssue ? (
+                    <span className="spinner" aria-hidden="true" />
+                  ) : null}
+                  <span>Create Issue</span>
                 </button>
               </div>
             </motion.div>

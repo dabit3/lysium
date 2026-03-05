@@ -2717,6 +2717,26 @@
   gap: var(--space-2);
 }
 
+.create-issue-input {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.create-issue-input:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 0;
+}
+
+.create-issue-input::placeholder {
+  color: var(--text-muted);
+}
+
 .card-scroll-content,
 .code-list,
 .jobs-list,
