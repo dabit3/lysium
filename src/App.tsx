@@ -223,6 +223,14 @@ const extractGithubOauthLogin = (payload: unknown) => {
 
 const DEVIN_PROXY_BASE_URL = '/api/devin/proxy'
 const DEVIN_SESSION_URL = '/api/devin/session'
+const DEFAULT_DEVIN_API_KEY =
+  typeof import.meta.env.VITE_DEVIN_API_KEY === 'string'
+    ? import.meta.env.VITE_DEVIN_API_KEY.trim()
+    : ''
+const DEFAULT_DEVIN_ORG_ID =
+  typeof import.meta.env.VITE_DEVIN_ORG_ID === 'string'
+    ? import.meta.env.VITE_DEVIN_ORG_ID.trim()
+    : ''
 const GITHUB_OAUTH_START_URL = '/api/github/oauth/start'
 const GITHUB_OAUTH_TOKEN_URL = '/api/github/oauth/token'
 const GITHUB_OAUTH_DISCONNECT_URL = '/api/github/oauth/disconnect'
@@ -1329,6 +1337,7 @@ function App() {
   const [isPostingComment, setIsPostingComment] = useState(false)
   const [isCreateIssueModalOpen, setIsCreateIssueModalOpen] = useState(false)
   const [createIssueRepo, setCreateIssueRepo] = useState('')
+  const [createIssueRepoQuery, setCreateIssueRepoQuery] = useState('')
   const [createIssueTitle, setCreateIssueTitle] = useState('')
   const [createIssueBody, setCreateIssueBody] = useState('')
   const [isCreatingIssue, setIsCreatingIssue] = useState(false)
@@ -1351,8 +1360,8 @@ function App() {
       (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
       'dark',
   )
-  const [devinApiKey, setDevinApiKey] = useState('')
-  const [devinOrgId, setDevinOrgId] = useState('')
+  const [devinApiKey, setDevinApiKey] = useState(DEFAULT_DEVIN_API_KEY)
+  const [devinOrgId, setDevinOrgId] = useState(DEFAULT_DEVIN_ORG_ID)
   const [devinCreateAsUserId, setDevinCreateAsUserId] = useState('')
   const [isLoadingDevinSession, setIsLoadingDevinSession] = useState(true)
   const [hasDevinSession, setHasDevinSession] = useState(false)
@@ -1453,6 +1462,14 @@ function App() {
 
     return repoOptions.filter((repo) => repo.toLowerCase().includes(normalizedFilter))
   }, [repoOptions, repoFilterQuery])
+  const filteredCreateIssueRepos = useMemo(() => {
+    const normalizedFilter = createIssueRepoQuery.trim().toLowerCase()
+    if (!normalizedFilter) {
+      return availableRepos
+    }
+
+    return availableRepos.filter((repo) => repo.toLowerCase().includes(normalizedFilter))
+  }, [availableRepos, createIssueRepoQuery])
   const activeIssue = issues[0]
   const activePr = pullRequests[0]
   const activeIssueAssessmentKey = activeIssue ? toIssueAssessmentKey(activeIssue) : ''
@@ -3606,7 +3623,8 @@ function App() {
   }
 
   const handleOpenCreateIssueModal = () => {
-    setCreateIssueRepo(githubSearchScope.replace(/^(user|org):/, '').trim() ? '' : '')
+    setCreateIssueRepo('')
+    setCreateIssueRepoQuery('')
     setCreateIssueTitle('')
     setCreateIssueBody('')
     setIsCreateIssueModalOpen(true)
@@ -3648,6 +3666,7 @@ function App() {
         issueNumber ? `Issue #${issueNumber} created.` : 'Issue created.',
       )
       setCreateIssueRepo('')
+      setCreateIssueRepoQuery('')
       setCreateIssueTitle('')
       setCreateIssueBody('')
     } catch (error) {
@@ -3834,8 +3853,8 @@ function App() {
       }
 
       setHasDevinSession(false)
-      setDevinApiKey('')
-      setDevinOrgId('')
+      setDevinApiKey(DEFAULT_DEVIN_API_KEY)
+      setDevinOrgId(DEFAULT_DEVIN_ORG_ID)
       setDevinCreateAsUserId('')
       setHasVerifiedDevinConnection(false)
       setHasGithubOauthSession(false)
@@ -3956,7 +3975,11 @@ function App() {
       .then((data) => {
         if (data) {
           setHasDevinSession(true)
-          setDevinOrgId(data.orgId ?? '')
+          const sessionOrgId =
+            typeof data.orgId === 'string' && data.orgId.trim().length > 0
+              ? data.orgId.trim()
+              : ''
+          setDevinOrgId(sessionOrgId || DEFAULT_DEVIN_ORG_ID)
           setDevinCreateAsUserId(data.createAsUserId ?? '')
           if (typeof data.githubSearchScope === 'string') {
             const serverScope = data.githubSearchScope
@@ -6038,15 +6061,44 @@ opens a PR.
               <p className="modal-caption">Create a new issue on GitHub</p>
 
               <input
-                type="text"
+                type="search"
                 className="create-issue-input"
-                value={createIssueRepo}
-                onChange={(event) => setCreateIssueRepo(event.target.value)}
-                placeholder="Repository (e.g. owner/repo)"
+                value={createIssueRepoQuery}
+                onChange={(event) => {
+                  const nextQuery = event.target.value
+                  setCreateIssueRepoQuery(nextQuery)
+                  setCreateIssueRepo(nextQuery)
+                }}
+                placeholder="Search repository (owner/repo)"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
               />
+
+              <div className="create-issue-repo-list" role="listbox" aria-label="Repository suggestions">
+                {filteredCreateIssueRepos.length === 0 ? (
+                  <p className="create-issue-repo-empty">No matching repositories.</p>
+                ) : (
+                  filteredCreateIssueRepos.map((repo) => {
+                    const isSelected = normalizeRepoPath(createIssueRepo) === repo
+                    return (
+                      <button
+                        key={repo}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        className={`create-issue-repo-option ${isSelected ? 'is-active' : ''}`.trim()}
+                        onClick={() => {
+                          setCreateIssueRepo(repo)
+                          setCreateIssueRepoQuery(repo)
+                        }}
+                      >
+                        {repo}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
 
               <input
                 type="text"

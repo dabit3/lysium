@@ -2737,6 +2737,50 @@
   color: var(--text-muted);
 }
 
+.create-issue-repo-list {
+  height: 132px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-main);
+  padding: 0.4rem;
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  scrollbar-width: none;
+}
+
+.create-issue-repo-list::-webkit-scrollbar {
+  display: none;
+}
+
+.create-issue-repo-option {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.69rem;
+  padding: 0.42rem 0.5rem;
+  cursor: pointer;
+}
+
+.create-issue-repo-option.is-active {
+  color: var(--text-primary);
+  border-color: rgba(0, 134, 228, 0.48);
+  background: rgba(0, 134, 228, 0.1);
+}
+
+.create-issue-repo-empty {
+  margin: 0;
+  padding: 0.25rem 0.35rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
 .card-scroll-content,
 .code-list,
 .jobs-list,
