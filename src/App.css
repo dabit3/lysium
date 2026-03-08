@@ -3146,6 +3146,360 @@
   background: rgba(255, 255, 230, 0.14);
 }
 
+[data-theme="claude"] {
+  --bg-main: #f4f3ee;
+  --bg-elevated: #ffffff;
+  --border-subtle: #d6d3cb;
+  --accent-primary: #c15f3c;
+  --accent-highlight: #c15f3c;
+  --text-primary: #2c2926;
+  --text-muted: #6e6a62;
+  --text-dim: #b1ada1;
+  --shadow-soft: 0 16px 32px rgba(44, 41, 38, 0.1);
+  --shadow-card: 0 8px 24px rgba(44, 41, 38, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="claude"] .auth-panel,
+[data-theme="claude"] .code-panel,
+[data-theme="claude"] .empty-state,
+[data-theme="claude"] .swipe-card,
+[data-theme="claude"] .comment-modal,
+[data-theme="claude"] .job-item,
+[data-theme="claude"] .action-item,
+[data-theme="claude"] .repo-list-item,
+[data-theme="claude"] .code-filter-empty,
+[data-theme="claude"] .code-empty-state,
+[data-theme="claude"] .card-scroll-content,
+[data-theme="claude"] .card-content-toggle,
+[data-theme="claude"] .code-snippet,
+[data-theme="claude"] .job-session-link,
+[data-theme="claude"] .fab-button.secondary {
+  background: rgba(255, 255, 255, 0.94);
+}
+
+[data-theme="claude"] .top-toggle button.is-active {
+  background: rgba(193, 95, 60, 0.1);
+  box-shadow: 0 1px 2px rgba(44, 41, 38, 0.1);
+}
+
+[data-theme="claude"] .jobs-button:hover:not(:disabled) {
+  color: #2c2926;
+  border-color: rgba(193, 95, 60, 0.4);
+  background: rgba(193, 95, 60, 0.08);
+}
+
+[data-theme="claude"] .jobs-button.is-active {
+  color: #2c2926;
+  border-color: rgba(193, 95, 60, 0.5);
+  background: rgba(193, 95, 60, 0.1);
+}
+
+[data-theme="claude"] .jobs-count-badge {
+  border-color: rgba(193, 95, 60, 0.34);
+  background: rgba(255, 255, 255, 0.86);
+  color: #6e6a62;
+}
+
+[data-theme="claude"] .jobs-button.has-running-jobs {
+  color: #c15f3c;
+}
+
+[data-theme="claude"] .jobs-button.has-running-jobs .jobs-count-badge {
+  border-color: rgba(193, 95, 60, 0.5);
+  background: rgba(193, 95, 60, 0.1);
+  color: #a04e30;
+}
+
+[data-theme="claude"] .auth-panel {
+  background: rgba(255, 255, 255, 0.84);
+}
+
+[data-theme="claude"] .auth-chip.unverified {
+  color: #6e6a62;
+}
+
+[data-theme="claude"] .auth-chip.missing {
+  color: #b1ada1;
+}
+
+[data-theme="claude"] .auth-field input,
+[data-theme="claude"] .repo-filter-input,
+[data-theme="claude"] .repo-request-input {
+  background: #ffffff;
+}
+
+[data-theme="claude"] .repo-filter-input:focus-visible,
+[data-theme="claude"] .repo-request-input:focus-visible {
+  outline-color: rgba(193, 95, 60, 0.4);
+}
+
+[data-theme="claude"] .skeleton-card {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+[data-theme="claude"] .startup-skeleton-frame::before,
+[data-theme="claude"] .startup-skeleton-frame::after {
+  background: rgba(244, 243, 238, 0.78);
+}
+
+[data-theme="claude"] .skeleton-avatar,
+[data-theme="claude"] .skeleton-line,
+[data-theme="claude"] .skeleton-pill,
+[data-theme="claude"] .skeleton-action {
+  background: rgba(193, 95, 60, 0.12);
+}
+
+[data-theme="claude"] .skeleton-scroll-block {
+  border-color: rgba(214, 211, 203, 0.74);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+[data-theme="claude"] .empty-state {
+  background: rgba(255, 255, 255, 0.84);
+}
+
+[data-theme="claude"] .code-panel {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+[data-theme="claude"] .code-panel-header h2 {
+  color: #2c2926;
+}
+
+[data-theme="claude"] .repo-list-item {
+  background: rgba(248, 247, 244, 0.92);
+  color: #6e6a62;
+}
+
+[data-theme="claude"] .repo-list-item.is-selected {
+  border-color: rgba(193, 95, 60, 0.35);
+  background: rgba(193, 95, 60, 0.06);
+  color: var(--text-primary);
+}
+
+[data-theme="claude"] .code-filter-empty {
+  border-color: rgba(214, 211, 203, 0.74);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+[data-theme="claude"] .code-filter-empty span,
+[data-theme="claude"] .repo-request-meta span {
+  color: #2c2926;
+}
+
+[data-theme="claude"] .code-empty-state {
+  border-color: rgba(214, 211, 203, 0.74);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+[data-theme="claude"] .swipe-card {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+[data-theme="claude"] .swipe-overlay.tone-neutral {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="claude"] .overlay-chip {
+  border-color: rgba(193, 95, 60, 0.25);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+[data-theme="claude"] .repo-name,
+[data-theme="claude"] .repo-name:visited {
+  color: #c15f3c;
+}
+
+[data-theme="claude"] .card-title {
+  color: #2c2926;
+}
+
+[data-theme="claude"] .summary-line.is-heading {
+  color: #2c2926;
+}
+
+[data-theme="claude"] .card-content-toggle {
+  border-color: rgba(214, 211, 203, 0.74);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+[data-theme="claude"] .card-content-toggle-button.is-active {
+  background: rgba(193, 95, 60, 0.1);
+}
+
+[data-theme="claude"] .card-scroll-content {
+  border-color: rgba(214, 211, 203, 0.74);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+[data-theme="claude"] .code-snippet {
+  border-color: rgba(214, 211, 203, 0.9);
+  background: #faf9f6;
+}
+
+[data-theme="claude"] .code-token.diffAdd {
+  color: #3a7a3a;
+  background: rgba(58, 122, 58, 0.1);
+}
+
+[data-theme="claude"] .code-token.diffRemove {
+  color: #a04e30;
+  background: rgba(193, 95, 60, 0.1);
+}
+
+[data-theme="claude"] .code-token.diffMeta {
+  color: #8a6840;
+}
+
+[data-theme="claude"] .diff-remove,
+[data-theme="claude"] .check-pill.pending,
+[data-theme="claude"] .ci-status.failed {
+  color: #b1ada1;
+}
+
+[data-theme="claude"] .ci-status.conflict {
+  color: #c15f3c;
+  border-color: rgba(193, 95, 60, 0.72);
+}
+
+[data-theme="claude"] .drawer-backdrop {
+  background: rgba(44, 41, 38, 0.3);
+}
+
+[data-theme="claude"] .jobs-drawer,
+[data-theme="claude"] .settings-drawer {
+  box-shadow: -8px 0 32px rgba(44, 41, 38, 0.15);
+}
+
+[data-theme="claude"] .jobs-close:hover {
+  background: rgba(193, 95, 60, 0.08);
+}
+
+[data-theme="claude"] .jobs-section-header h4 {
+  color: #2c2926;
+}
+
+[data-theme="claude"] .job-item,
+[data-theme="claude"] .action-item {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="claude"] .job-item:hover {
+  border-color: rgba(193, 95, 60, 0.3);
+}
+
+[data-theme="claude"] .job-label,
+[data-theme="claude"] .action-label {
+  color: #3d3832;
+}
+
+[data-theme="claude"] .job-status.running {
+  color: #8a8478;
+}
+
+[data-theme="claude"] .job-status.failed {
+  color: #b1ada1;
+}
+
+[data-theme="claude"] .job-session-link {
+  background: rgba(244, 243, 238, 0.92);
+}
+
+[data-theme="claude"] .job-pr-link {
+  background: rgba(193, 95, 60, 0.08);
+  color: #a04e30;
+}
+
+[data-theme="claude"] .modal-backdrop {
+  background: rgba(44, 41, 38, 0.35);
+}
+
+[data-theme="claude"] .comment-modal {
+  background: #ffffff;
+}
+
+[data-theme="claude"] .fab-button {
+  box-shadow: 0 2px 4px rgba(44, 41, 38, 0.08);
+}
+
+[data-theme="claude"] .fab-button.primary.repo-request-button:disabled {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #b1ada1;
+}
+
+[data-theme="claude"] .fab-button.secondary {
+  background: rgba(248, 247, 244, 0.92);
+}
+
+[data-theme="claude"] .fab-button.danger {
+  background: rgba(217, 83, 79, 0.1);
+  color: #a83230;
+}
+
+[data-theme="claude"] .fab-button.success {
+  background: rgba(193, 95, 60, 0.1);
+  color: #a04e30;
+}
+
+[data-theme="claude"] .fab-button.assess-button {
+  background: rgba(193, 95, 60, 0.05);
+  border-color: rgba(193, 95, 60, 0.2);
+  color: #a04e30;
+  text-shadow: none;
+  box-shadow: 0 1px 2px rgba(44, 41, 38, 0.04);
+}
+
+[data-theme="claude"] .fab-button.pr-assess-action {
+  border-color: rgba(193, 95, 60, 0.2);
+  background: rgba(193, 95, 60, 0.05);
+  color: #a04e30;
+  text-shadow: none;
+  box-shadow: 0 1px 2px rgba(44, 41, 38, 0.04);
+}
+
+[data-theme="claude"] .spinner {
+  border-color: rgba(193, 95, 60, 0.2);
+  border-top-color: var(--accent-primary);
+}
+
+[data-theme="claude"] .toast {
+  border-color: rgba(214, 211, 203, 0.6);
+  background: rgba(255, 255, 255, 0.97);
+  color: #2c2926;
+  box-shadow: 0 8px 18px rgba(44, 41, 38, 0.12);
+}
+
+[data-theme="claude"] .toast-undo-button,
+[data-theme="claude"] .toast-dismiss-button {
+  color: rgba(160, 78, 48, 0.78);
+}
+
+[data-theme="claude"] .toast-dismiss-button {
+  color: rgba(110, 106, 98, 0.62);
+}
+
+[data-theme="claude"] .toast-undo-button:hover,
+[data-theme="claude"] .toast-dismiss-button:hover {
+  color: #a04e30;
+  background: rgba(193, 95, 60, 0.1);
+}
+
+[data-theme="claude"] .toast-undo-button:focus-visible,
+[data-theme="claude"] .toast-dismiss-button:focus-visible {
+  outline-color: rgba(193, 95, 60, 0.45);
+  background: rgba(193, 95, 60, 0.1);
+  color: #843f26;
+}
+
+[data-theme="claude"] .action-outcome.pending {
+  color: #b1ada1;
+}
+
+[data-theme="claude"] .action-outcome.failed {
+  color: #b1ada1;
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -3408,6 +3762,14 @@
 
   [data-theme="light"] .desktop-nav-button.is-active {
     background: rgba(0, 0, 0, 0.08);
+  }
+
+  [data-theme="claude"] .desktop-nav-button:hover {
+    background: rgba(193, 95, 60, 0.06);
+  }
+
+  [data-theme="claude"] .desktop-nav-button.is-active {
+    background: rgba(193, 95, 60, 0.1);
   }
 
   .desktop-main-activity {
