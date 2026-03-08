@@ -1355,9 +1355,9 @@ function App() {
   const [activityPanelView, setActivityPanelView] = useState<'sessions' | 'actions'>('sessions')
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
-  const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
+  const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora' | 'among-us'>(
     () =>
-      (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
+      (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora' | 'among-us') ??
       'dark',
   )
   const [devinApiKey, setDevinApiKey] = useState(DEFAULT_DEVIN_API_KEY)
@@ -4699,6 +4699,13 @@ opens a PR.
           onClick={() => setColorTheme('aurora')}
         >
           Aurora
+        </button>
+        <button
+          type="button"
+          className={`theme-option${colorTheme === 'among-us' ? ' is-active' : ''}`}
+          onClick={() => setColorTheme('among-us')}
+        >
+          Among Us
         </button>
       </div>
     </div>
