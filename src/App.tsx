@@ -5246,6 +5246,14 @@ opens a PR.
                 <div className="desktop-nav-swipe-actions">
                   <button
                     type="button"
+                    className="fab-button secondary desktop-swipe-button"
+                    onClick={() => commitSwipe('down')}
+                  >
+                    {desktopDownSwipeAction?.icon}
+                    <span>{desktopDownSwipeAction?.label ?? 'Skip'}</span>
+                  </button>
+                  <button
+                    type="button"
                     className={`fab-button desktop-swipe-button ${desktopLeftSwipeAction?.tone === 'danger' ? 'danger' : 'secondary'}`.trim()}
                     onClick={() => commitSwipe('left')}
                   >
@@ -5259,14 +5267,6 @@ opens a PR.
                   >
                     {desktopRightSwipeAction?.icon}
                     <span>{desktopRightSwipeAction?.label ?? 'Apply'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="fab-button secondary desktop-swipe-button"
-                    onClick={() => commitSwipe('down')}
-                  >
-                    {desktopDownSwipeAction?.icon}
-                    <span>{desktopDownSwipeAction?.label ?? 'Skip'}</span>
                   </button>
                   {activeTab === 'issues' ? (
                     <>
