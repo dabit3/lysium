@@ -5244,16 +5244,6 @@ opens a PR.
               </nav>
               {canTriggerDesktopSwipe ? (
                 <div className="desktop-nav-swipe-actions">
-                  {activeTab === 'issues' ? (
-                    <button
-                      type="button"
-                      className="fab-button secondary desktop-swipe-button"
-                      onClick={() => commitSwipe('down')}
-                    >
-                      {desktopDownSwipeAction?.icon}
-                      <span>{desktopDownSwipeAction?.label ?? 'Skip'}</span>
-                    </button>
-                  ) : null}
                   <button
                     type="button"
                     className={`fab-button desktop-swipe-button ${desktopLeftSwipeAction?.tone === 'danger' ? 'danger' : 'secondary'}`.trim()}
@@ -5270,16 +5260,14 @@ opens a PR.
                     {desktopRightSwipeAction?.icon}
                     <span>{desktopRightSwipeAction?.label ?? 'Apply'}</span>
                   </button>
-                  {activeTab !== 'issues' ? (
-                    <button
-                      type="button"
-                      className="fab-button secondary desktop-swipe-button"
-                      onClick={() => commitSwipe('down')}
-                    >
-                      {desktopDownSwipeAction?.icon}
-                      <span>{desktopDownSwipeAction?.label ?? 'Skip'}</span>
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="fab-button secondary desktop-swipe-button"
+                    onClick={() => commitSwipe('down')}
+                  >
+                    {desktopDownSwipeAction?.icon}
+                    <span>{desktopDownSwipeAction?.label ?? 'Skip'}</span>
+                  </button>
                   {activeTab === 'issues' ? (
                     <>
                       {isActiveIssueAssessed && activeIssueAssessmentSessionUrl ? (
