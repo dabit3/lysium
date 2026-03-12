@@ -314,8 +314,8 @@
 }
 
 [data-theme="light"] .fab-button.danger {
-  background: rgba(217, 83, 79, 0.1);
-  color: #a83230;
+  background: rgba(248, 248, 248, 0.92);
+  color: var(--text-muted);
 }
 
 [data-theme="light"] .fab-button.success {
@@ -636,8 +636,8 @@
 }
 
 [data-theme="aurora-legacy"] .fab-button.danger {
-  background: rgba(198, 123, 109, 0.14);
-  color: #944e43;
+  background: rgba(252, 252, 252, 0.94);
+  color: var(--text-muted);
 }
 
 [data-theme="aurora-legacy"] .fab-button.success {
@@ -2464,9 +2464,9 @@
 }
 
 .fab-button.danger {
-  background: rgba(217, 83, 79, 0.2);
-  border-color: rgba(217, 83, 79, 0.75);
-  color: #ffd8d4;
+  background: rgba(28, 28, 28, 0.92);
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
 }
 
 .fab-button.success {
@@ -2861,8 +2861,8 @@
 }
 
 [data-theme="aurora-legacy"] .fab-button.danger {
-  background: rgba(198, 123, 109, 0.1);
-  color: #944e43;
+  background: rgba(252, 252, 252, 0.94);
+  color: var(--text-muted);
 }
 
 [data-theme="aurora-legacy"] .code-filter-empty,
@@ -3080,7 +3080,11 @@
   border-color: rgba(255, 255, 230, 0.46);
 }
 
-[data-theme="aurora"] .fab-button.danger,
+[data-theme="aurora"] .fab-button.danger {
+  border-color: rgba(203, 203, 203, 0.34);
+  color: #cbcbcb;
+}
+
 [data-theme="aurora"] .ci-status.conflict {
   border-color: rgba(255, 255, 230, 0.46);
   color: #ffffe6;
