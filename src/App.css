@@ -2120,7 +2120,7 @@
 
 .theme-toggle-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.25rem;
   padding: 0.25rem;
   border: 1px solid var(--border-subtle);
@@ -3148,6 +3148,376 @@
 [data-theme="aurora"] .skeleton-line,
 [data-theme="aurora"] .skeleton-pill {
   background: rgba(255, 255, 230, 0.14);
+}
+
+[data-theme="claude"] {
+  --bg-main: #f4f3ee;
+  --bg-elevated: #ffffff;
+  --border-subtle: #d5d2c8;
+  --accent-primary: #c15f3c;
+  --accent-highlight: #c15f3c;
+  --status-success: #0e9e8e;
+  --text-primary: #2a2520;
+  --text-muted: #6e6a62;
+  --text-dim: #b1ada1;
+  --shadow-soft: 0 16px 32px rgba(80, 60, 40, 0.1);
+  --shadow-card: 0 8px 24px rgba(80, 60, 40, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+/* Claude theme: top toggle active */
+[data-theme="claude"] .top-toggle button.is-active {
+  background: rgba(193, 95, 60, 0.1);
+  box-shadow: 0 1px 2px rgba(80, 60, 40, 0.1);
+}
+
+/* Claude theme: jobs button hover */
+[data-theme="claude"] .jobs-button:hover:not(:disabled) {
+  color: #2a2520;
+  border-color: rgba(193, 95, 60, 0.5);
+  background: rgba(193, 95, 60, 0.08);
+}
+
+[data-theme="claude"] .jobs-button.is-active {
+  color: #2a2520;
+  border-color: rgba(193, 95, 60, 0.46);
+  background: rgba(193, 95, 60, 0.06);
+}
+
+/* Claude theme: jobs count badge */
+[data-theme="claude"] .jobs-count-badge {
+  border-color: rgba(193, 95, 60, 0.36);
+  background: rgba(244, 243, 238, 0.9);
+  color: #6e6a62;
+}
+
+[data-theme="claude"] .jobs-button.has-running-jobs {
+  color: #c15f3c;
+}
+
+[data-theme="claude"] .jobs-button.has-running-jobs .jobs-count-badge {
+  border-color: rgba(193, 95, 60, 0.56);
+  background: rgba(193, 95, 60, 0.1);
+  color: #c15f3c;
+}
+
+/* Claude theme: auth panel */
+[data-theme="claude"] .auth-panel {
+  background: rgba(255, 255, 255, 0.84);
+}
+
+[data-theme="claude"] .auth-chip.unverified {
+  color: #6e6a62;
+}
+
+[data-theme="claude"] .auth-chip.missing {
+  color: #b1ada1;
+}
+
+/* Claude theme: inputs */
+[data-theme="claude"] .auth-field input,
+[data-theme="claude"] .repo-filter-input,
+[data-theme="claude"] .repo-request-input {
+  background: #ffffff;
+}
+
+[data-theme="claude"] .repo-filter-input:focus-visible,
+[data-theme="claude"] .repo-request-input:focus-visible {
+  outline-color: rgba(193, 95, 60, 0.4);
+}
+
+/* Claude theme: skeleton */
+[data-theme="claude"] .skeleton-card {
+  background: rgba(255, 255, 255, 0.84);
+}
+
+[data-theme="claude"] .startup-skeleton-frame::before,
+[data-theme="claude"] .startup-skeleton-frame::after {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+[data-theme="claude"] .skeleton-avatar,
+[data-theme="claude"] .skeleton-line,
+[data-theme="claude"] .skeleton-pill,
+[data-theme="claude"] .skeleton-action {
+  background: rgba(193, 95, 60, 0.1);
+}
+
+[data-theme="claude"] .skeleton-scroll-block {
+  border-color: rgba(213, 210, 200, 0.74);
+  background: rgba(244, 243, 238, 0.62);
+}
+
+/* Claude theme: panels */
+[data-theme="claude"] .empty-state {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+[data-theme="claude"] .code-panel {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+[data-theme="claude"] .code-panel-header h2 {
+  color: #2a2520;
+}
+
+/* Claude theme: repo list items */
+[data-theme="claude"] .repo-list-item {
+  background: rgba(255, 255, 255, 0.88);
+  color: #6e6a62;
+}
+
+[data-theme="claude"] .repo-list-item.is-selected {
+  border-color: rgba(193, 95, 60, 0.35);
+  background: rgba(193, 95, 60, 0.06);
+  color: var(--text-primary);
+}
+
+/* Claude theme: code filter empty & code empty state */
+[data-theme="claude"] .code-filter-empty {
+  border-color: rgba(213, 210, 200, 0.74);
+  background: rgba(244, 243, 238, 0.62);
+}
+
+[data-theme="claude"] .code-filter-empty span,
+[data-theme="claude"] .repo-request-meta span {
+  color: #2a2520;
+}
+
+[data-theme="claude"] .code-empty-state {
+  border-color: rgba(213, 210, 200, 0.74);
+  background: rgba(244, 243, 238, 0.78);
+}
+
+/* Claude theme: swipe card */
+[data-theme="claude"] .swipe-card {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+/* Claude theme: swipe overlays */
+[data-theme="claude"] .swipe-overlay.tone-neutral {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="claude"] .overlay-chip {
+  border-color: rgba(193, 95, 60, 0.2);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* Claude theme: card content */
+[data-theme="claude"] .repo-name,
+[data-theme="claude"] .repo-name:visited {
+  color: #c15f3c;
+}
+
+[data-theme="claude"] .card-title {
+  color: #2a2520;
+}
+
+[data-theme="claude"] .summary-line.is-heading {
+  color: #2a2520;
+}
+
+[data-theme="claude"] .card-content-toggle {
+  border-color: rgba(213, 210, 200, 0.74);
+  background: rgba(244, 243, 238, 0.58);
+}
+
+[data-theme="claude"] .card-content-toggle-button.is-active {
+  background: rgba(193, 95, 60, 0.1);
+}
+
+[data-theme="claude"] .card-scroll-content {
+  border-color: rgba(213, 210, 200, 0.74);
+  background: rgba(244, 243, 238, 0.58);
+}
+
+/* Claude theme: code snippet */
+[data-theme="claude"] .code-snippet {
+  border-color: rgba(213, 210, 200, 0.9);
+  background: #faf9f6;
+}
+
+[data-theme="claude"] .code-token.diffAdd {
+  color: #0a5e4f;
+  background: rgba(14, 158, 142, 0.12);
+}
+
+[data-theme="claude"] .code-token.diffRemove {
+  color: #8e2b22;
+  background: rgba(192, 57, 43, 0.12);
+}
+
+[data-theme="claude"] .code-token.diffMeta {
+  color: #c15f3c;
+}
+
+/* Claude theme: diff colors */
+[data-theme="claude"] .diff-remove,
+[data-theme="claude"] .check-pill.pending,
+[data-theme="claude"] .ci-status.failed {
+  color: #888;
+}
+
+[data-theme="claude"] .ci-status.conflict {
+  color: #c0392b;
+  border-color: rgba(192, 57, 43, 0.72);
+}
+
+/* Claude theme: drawer backdrop */
+[data-theme="claude"] .drawer-backdrop {
+  background: rgba(42, 37, 32, 0.3);
+}
+
+/* Claude theme: drawers */
+[data-theme="claude"] .jobs-drawer,
+[data-theme="claude"] .settings-drawer {
+  box-shadow: -8px 0 32px rgba(80, 60, 40, 0.15);
+}
+
+[data-theme="claude"] .jobs-close:hover {
+  background: rgba(193, 95, 60, 0.08);
+}
+
+/* Claude theme: job section headers & items */
+[data-theme="claude"] .jobs-section-header h4 {
+  color: #2a2520;
+}
+
+[data-theme="claude"] .job-item,
+[data-theme="claude"] .action-item {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="claude"] .job-item:hover {
+  border-color: rgba(193, 95, 60, 0.3);
+}
+
+[data-theme="claude"] .job-label,
+[data-theme="claude"] .action-label {
+  color: #2a2520;
+}
+
+[data-theme="claude"] .job-status.running {
+  color: #6e6a62;
+}
+
+[data-theme="claude"] .job-status.failed {
+  color: #888;
+}
+
+[data-theme="claude"] .job-session-link {
+  background: rgba(244, 243, 238, 0.92);
+}
+
+[data-theme="claude"] .job-pr-link {
+  background: rgba(193, 95, 60, 0.08);
+  color: #8a3f22;
+}
+
+/* Claude theme: modal */
+[data-theme="claude"] .modal-backdrop {
+  background: rgba(42, 37, 32, 0.35);
+}
+
+[data-theme="claude"] .comment-modal {
+  background: #ffffff;
+}
+
+/* Claude theme: fab buttons */
+[data-theme="claude"] .fab-button {
+  box-shadow: 0 2px 4px rgba(80, 60, 40, 0.08);
+}
+
+[data-theme="claude"] .fab-button.primary.repo-request-button:disabled {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #b1ada1;
+}
+
+[data-theme="claude"] .fab-button.secondary {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+[data-theme="claude"] .fab-button.danger {
+  background: rgba(217, 83, 79, 0.1);
+  color: #a83230;
+}
+
+[data-theme="claude"] .fab-button.success {
+  background: rgba(193, 95, 60, 0.1);
+  color: #8a3f22;
+}
+
+[data-theme="claude"] .fab-button.assess-button {
+  background: rgba(193, 95, 60, 0.05);
+  border-color: rgba(193, 95, 60, 0.2);
+  color: #c15f3c;
+  text-shadow: none;
+  box-shadow: 0 1px 2px rgba(80, 60, 40, 0.04);
+}
+
+[data-theme="claude"] .fab-button.pr-assess-action {
+  border-color: rgba(193, 95, 60, 0.2);
+  background: rgba(193, 95, 60, 0.05);
+  color: #c15f3c;
+  text-shadow: none;
+  box-shadow: 0 1px 2px rgba(80, 60, 40, 0.04);
+}
+
+/* Claude theme: spinner */
+[data-theme="claude"] .spinner {
+  border-color: rgba(193, 95, 60, 0.15);
+  border-top-color: var(--accent-primary);
+}
+
+/* Claude theme: toast */
+[data-theme="claude"] .toast {
+  border-color: rgba(193, 95, 60, 0.14);
+  background: rgba(255, 255, 255, 0.97);
+  color: #2a2520;
+  box-shadow: 0 8px 18px rgba(80, 60, 40, 0.12);
+}
+
+[data-theme="claude"] .toast-undo-button,
+[data-theme="claude"] .toast-dismiss-button {
+  color: rgba(193, 95, 60, 0.78);
+}
+
+[data-theme="claude"] .toast-dismiss-button {
+  color: rgba(110, 106, 98, 0.62);
+}
+
+[data-theme="claude"] .toast-undo-button:hover,
+[data-theme="claude"] .toast-dismiss-button:hover {
+  color: #c15f3c;
+  background: rgba(193, 95, 60, 0.1);
+}
+
+[data-theme="claude"] .toast-undo-button:focus-visible,
+[data-theme="claude"] .toast-dismiss-button:focus-visible {
+  outline-color: rgba(193, 95, 60, 0.45);
+  background: rgba(193, 95, 60, 0.1);
+  color: #8a3f22;
+}
+
+/* Claude theme: action outcome colors */
+[data-theme="claude"] .action-outcome.pending {
+  color: #888;
+}
+
+[data-theme="claude"] .action-outcome.failed {
+  color: #999;
+}
+
+/* Claude theme: desktop nav button */
+@media (min-width: 1000px) {
+  [data-theme="claude"] .desktop-nav-button:hover {
+    background: rgba(193, 95, 60, 0.06);
+  }
+
+  [data-theme="claude"] .desktop-nav-button.is-active {
+    background: rgba(193, 95, 60, 0.1);
+  }
 }
 
 @keyframes spin {
