@@ -314,8 +314,8 @@
 }
 
 [data-theme="light"] .fab-button.danger {
-  background: rgba(217, 83, 79, 0.1);
-  color: #a83230;
+  background: rgba(30, 41, 59, 0.08);
+  color: #334155;
 }
 
 [data-theme="light"] .fab-button.success {
@@ -636,8 +636,8 @@
 }
 
 [data-theme="aurora-legacy"] .fab-button.danger {
-  background: rgba(198, 123, 109, 0.14);
-  color: #944e43;
+  background: rgba(148, 163, 184, 0.14);
+  color: #475569;
 }
 
 [data-theme="aurora-legacy"] .fab-button.success {
@@ -2464,9 +2464,9 @@
 }
 
 .fab-button.danger {
-  background: rgba(217, 83, 79, 0.2);
-  border-color: rgba(217, 83, 79, 0.75);
-  color: #ffd8d4;
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.4);
+  color: #e2e8f0;
 }
 
 .fab-button.success {
@@ -3082,7 +3082,7 @@
 
 [data-theme="aurora"] .fab-button.danger,
 [data-theme="aurora"] .ci-status.conflict {
-  border-color: rgba(255, 255, 230, 0.46);
+  border-color: rgba(255, 255, 230, 0.3);
   color: #ffffe6;
 }
 
