@@ -2861,8 +2861,8 @@
 }
 
 [data-theme="aurora-legacy"] .fab-button.danger {
-  background: rgba(198, 123, 109, 0.1);
-  color: #944e43;
+  background: rgba(252, 252, 252, 0.94);
+  color: var(--text-muted);
 }
 
 [data-theme="aurora-legacy"] .code-filter-empty,
@@ -3080,7 +3080,11 @@
   border-color: rgba(255, 255, 230, 0.46);
 }
 
-[data-theme="aurora"] .fab-button.danger,
+[data-theme="aurora"] .fab-button.danger {
+  border-color: rgba(203, 203, 203, 0.34);
+  color: #cbcbcb;
+}
+
 [data-theme="aurora"] .ci-status.conflict {
   border-color: rgba(255, 255, 230, 0.3);
   color: #ffffe6;
