@@ -10,7 +10,9 @@
       "Exec(node)",
       "Exec(python3)",
       "Exec(curl)",
-      "Exec(npx tsc)"
+      "Exec(npx tsc)",
+      "Exec(sed)",
+      "Exec(cat)"
     ]
   }
 }
