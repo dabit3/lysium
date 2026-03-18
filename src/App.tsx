@@ -1690,16 +1690,17 @@ function App() {
     })
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const addAction = (label: string, outcome: 'pending' | 'success' | 'failed'): number => {
+    void label
+    void outcome
     const actionId = nextActionIdRef.current
     nextActionIdRef.current += 1
     return actionId
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const updateAction = (actionId: number, patch: Record<string, unknown>) => {
-    /* no-op: basic activity view removed */
+    void actionId
+    void patch
   }
 
   const addJob = (
