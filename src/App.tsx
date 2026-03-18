@@ -2442,7 +2442,7 @@ function App() {
             return
           }
         }
-        if (data.status === 'finished' || data.status === 'stopped') {
+        if (isTerminalDevinStatus(data.status)) {
           return
         }
       } catch {
