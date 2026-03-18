@@ -64,6 +64,8 @@ interface JobEntry {
   sessionUrl?: string
   pullRequestUrl?: string
   createdAt: number
+  devinStatus?: string
+  statusDetail?: string
 }
 
 
@@ -85,6 +87,50 @@ interface DevinSessionPayload {
   status_detail?: string | null
   structured_output?: unknown
   [key: string]: unknown
+}
+
+const TERMINAL_DEVIN_STATUSES = new Set(['finished', 'stopped', 'exit', 'error'])
+
+const isTerminalDevinStatus = (status: string | undefined): boolean =>
+  typeof status === 'string' && TERMINAL_DEVIN_STATUSES.has(status)
+
+const formatDevinStatusLabel = (status: string): string => {
+  switch (status) {
+    case 'running':
+      return 'Running'
+    case 'suspended':
+      return 'Suspended'
+    case 'exit':
+      return 'Exited'
+    case 'error':
+      return 'Error'
+    case 'finished':
+      return 'Finished'
+    case 'stopped':
+      return 'Stopped'
+    case 'blocked':
+      return 'Blocked'
+    default:
+      return status.charAt(0).toUpperCase() + status.slice(1)
+  }
+}
+
+const devinStatusToBadgeClass = (status: string): string => {
+  switch (status) {
+    case 'running':
+      return 'badge-running'
+    case 'suspended':
+    case 'blocked':
+      return 'badge-suspended'
+    case 'exit':
+    case 'finished':
+    case 'stopped':
+      return 'badge-exit'
+    case 'error':
+      return 'badge-error'
+    default:
+      return 'badge-default'
+  }
 }
 
 interface GithubSearchUser {
@@ -2383,6 +2429,12 @@ function App() {
       })
       try {
         const data = await fetchDevinSessionById(sessionId)
+        const nextDevinStatus = typeof data.status === 'string' ? data.status : undefined
+        const nextStatusDetail =
+          typeof data.status_detail === 'string' && data.status_detail.trim().length > 0
+            ? data.status_detail.trim()
+            : undefined
+        updateJob(jobId, { devinStatus: nextDevinStatus, statusDetail: nextStatusDetail })
         if (data.structured_output && typeof data.structured_output === 'object') {
           const output = data.structured_output as Record<string, unknown>
           if (typeof output.pull_request_url === 'string' && output.pull_request_url.trim().length > 0) {
@@ -3946,6 +3998,46 @@ function App() {
     savePersistedJobs(jobs)
   }, [jobs])
 
+  const pollJobStatusesRef = useRef<() => Promise<void>>()
+  pollJobStatusesRef.current = async () => {
+    const pollableJobs = jobs.filter(
+      (job) => job.sessionUrl && !isTerminalDevinStatus(job.devinStatus),
+    )
+
+    for (const job of pollableJobs) {
+      const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
+      if (!sessionId) continue
+
+      try {
+        const data = await fetchDevinSessionById(sessionId)
+        const nextDevinStatus = typeof data.status === 'string' ? data.status : undefined
+        const nextStatusDetail =
+          typeof data.status_detail === 'string' && data.status_detail.trim().length > 0
+            ? data.status_detail.trim()
+            : undefined
+        updateJob(job.id, { devinStatus: nextDevinStatus, statusDetail: nextStatusDetail })
+      } catch {
+        // silently continue
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!hasDevinSession) return
+
+    const tick = () => {
+      void pollJobStatusesRef.current?.()
+    }
+
+    const initialTimeout = window.setTimeout(tick, 5000)
+    const intervalId = window.setInterval(tick, 15000)
+
+    return () => {
+      window.clearTimeout(initialTimeout)
+      window.clearInterval(intervalId)
+    }
+  }, [hasDevinSession])
+
   useEffect(() => {
     if (!hasDevinSession || !hasDevinOrgId || !hasGithubOauthSession || !hasGithubScope) {
       hasAttemptedStartupSyncRef.current = false
@@ -4919,6 +5011,20 @@ opens a PR.
                   <p className="job-label">{job.label}</p>
                   <span className={`job-status ${job.status}`}>{job.status}</span>
                 </div>
+
+                {job.devinStatus ? (
+                  <div className="job-devin-status-row">
+                    <span className={`job-devin-badge ${devinStatusToBadgeClass(job.devinStatus)}`}>
+                      {job.devinStatus === 'running' ? (
+                        <span className="badge-dot-pulse" aria-hidden="true" />
+                      ) : null}
+                      {formatDevinStatusLabel(job.devinStatus)}
+                    </span>
+                    {job.statusDetail ? (
+                      <span className="job-status-detail">{job.statusDetail}</span>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <p className="job-target">{job.target}</p>
                 <p className="job-message">{job.message}</p>
