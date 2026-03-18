@@ -66,12 +66,6 @@ interface JobEntry {
   createdAt: number
 }
 
-interface ActionEntry {
-  id: number
-  label: string
-  outcome: 'pending' | 'success' | 'failed'
-  createdAt: number
-}
 
 interface AssessedIssueEntry {
   assessedAt: number
@@ -1342,7 +1336,6 @@ function App() {
   const [createIssueBody, setCreateIssueBody] = useState('')
   const [isCreatingIssue, setIsCreatingIssue] = useState(false)
   const [jobs, setJobs] = useState<JobEntry[]>(() => loadPersistedJobs())
-  const [actionStream, setActionStream] = useState<ActionEntry[]>([])
   const [isJobsOpen, setIsJobsOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
@@ -1352,7 +1345,6 @@ function App() {
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_WIDE_LAYOUT_MEDIA_QUERY).matches,
   )
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
-  const [activityPanelView, setActivityPanelView] = useState<'sessions' | 'actions'>('sessions')
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
   const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
@@ -1420,6 +1412,7 @@ function App() {
     })()
   )
   const nextActionIdRef = useRef(1)
+  // Action tracking kept as no-ops; UI only shows session activity now.
   const mergeConflictPollingLookupRef = useRef<Record<string, true>>({})
   const syncGithubFeedRef = useRef<
     ((options?: { autoTriggered?: boolean }) => Promise<void>) | null
@@ -1697,29 +1690,17 @@ function App() {
     })
   }
 
-  const addAction = (
-    label: string,
-    outcome: ActionEntry['outcome'],
-  ): number => {
+  const addAction = (label: string, outcome: 'pending' | 'success' | 'failed'): number => {
+    void label
+    void outcome
     const actionId = nextActionIdRef.current
     nextActionIdRef.current += 1
-
-    setActionStream((previous) =>
-      [
-        { id: actionId, label, outcome, createdAt: Date.now() },
-        ...previous,
-      ].slice(0, 50),
-    )
-
     return actionId
   }
 
-  const updateAction = (actionId: number, patch: Partial<ActionEntry>) => {
-    setActionStream((previous) =>
-      previous.map((entry) =>
-        entry.id === actionId ? { ...entry, ...patch } : entry,
-      ),
-    )
+  const updateAction = (actionId: number, patch: Record<string, unknown>) => {
+    void actionId
+    void patch
   }
 
   const addJob = (
@@ -4986,105 +4967,19 @@ opens a PR.
     )
   }
 
-  const renderRecentActionsSectionContent = () => (
-    <>
-      <div className="jobs-section-header">
-        <h4>Actions</h4>
-        <span>{actionStream.length}</span>
-      </div>
-
-      {actionStream.length === 0 ? (
-        <p className="jobs-empty">No activity yet.</p>
-      ) : (
-        <ul className="jobs-actions-list">
-          {actionStream.slice(0, 18).map((action) => (
-            <li key={action.id} className="action-item">
-              <div>
-                <p className="action-label">{action.label}</p>
-                <span className="action-time">{formatRelativeTime(action.createdAt)}</span>
-              </div>
-              <span className={`action-outcome ${action.outcome}`}>{action.outcome}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  )
-
-  const activityPanelViewTransition: Transition = prefersReducedMotion
-    ? {
-        type: 'tween',
-        duration: 0.08,
-        ease: 'easeOut',
-      }
-    : {
-        type: 'tween',
-        duration: 0.16,
-        ease: 'easeOut',
-      }
-  const activityPanelViewInitial = prefersReducedMotion
-    ? { opacity: 0 }
-    : { opacity: 0, y: 5 }
-  const activityPanelViewExit = prefersReducedMotion
-    ? { opacity: 0 }
-    : { opacity: 0, y: -4 }
   const renderActivityPanelViewContent = (options?: { closeOnLinkClick?: boolean }) => (
-    <AnimatePresence mode="wait" initial={false}>
-      {activityPanelView === 'sessions' ? (
-        <motion.section
-          key="activity-panel-sessions"
-          className="jobs-drawer-section"
-          aria-label="Sessions"
-          initial={activityPanelViewInitial}
-          animate={{ opacity: 1, y: 0 }}
-          exit={activityPanelViewExit}
-          transition={activityPanelViewTransition}
-        >
-          {renderJobsSectionContent(options)}
-        </motion.section>
-      ) : (
-        <motion.section
-          key="activity-panel-actions"
-          className="jobs-drawer-section"
-          aria-label="Actions"
-          initial={activityPanelViewInitial}
-          animate={{ opacity: 1, y: 0 }}
-          exit={activityPanelViewExit}
-          transition={activityPanelViewTransition}
-        >
-          {renderRecentActionsSectionContent()}
-        </motion.section>
-      )}
-    </AnimatePresence>
+    <section className="jobs-drawer-section" aria-label="Sessions">
+      {renderJobsSectionContent(options)}
+    </section>
   )
 
   const renderActivityPanel = (panelClassName?: string) => (
     <section
       className={`auth-panel ${panelClassName ?? ''}`.trim()}
-      aria-label="Sessions and actions"
+      aria-label="Session activity"
     >
       <div className="auth-panel-header">
         <h3>Activity</h3>
-        <div className="activity-view-toggle" role="tablist" aria-label="Session and action view">
-          <button
-            type="button"
-            role="tab"
-            className={`activity-toggle-button ${activityPanelView === 'sessions' ? 'is-active' : ''}`.trim()}
-            aria-selected={activityPanelView === 'sessions'}
-            onClick={() => setActivityPanelView('sessions')}
-          >
-            Sessions
-          </button>
-          <button
-            type="button"
-            role="tab"
-            className={`activity-toggle-button ${activityPanelView === 'actions' ? 'is-active' : ''}`.trim()}
-            aria-selected={activityPanelView === 'actions'}
-            onClick={() => setActivityPanelView('actions')}
-          >
-            Actions
-          </button>
-        </div>
       </div>
       <div className="jobs-drawer-content desktop-activity-content activity-content-single">
         {renderActivityPanelViewContent()}
@@ -6229,7 +6124,7 @@ opens a PR.
               className="jobs-drawer"
               role="dialog"
               aria-modal="true"
-              aria-label="Sessions and actions"
+              aria-label="Session activity"
               onClick={(event) => event.stopPropagation()}
               initial={drawerPanelInitial}
               animate={{ x: 0, opacity: 1 }}
@@ -6244,26 +6139,6 @@ opens a PR.
               >
                 <div className="jobs-drawer-header-main">
                   <h3>Activity</h3>
-                  <div className="activity-view-toggle" role="tablist" aria-label="Session and action view">
-                    <button
-                      type="button"
-                      role="tab"
-                      className={`activity-toggle-button ${activityPanelView === 'sessions' ? 'is-active' : ''}`.trim()}
-                      aria-selected={activityPanelView === 'sessions'}
-                      onClick={() => setActivityPanelView('sessions')}
-                    >
-                      Sessions
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      className={`activity-toggle-button ${activityPanelView === 'actions' ? 'is-active' : ''}`.trim()}
-                      aria-selected={activityPanelView === 'actions'}
-                      onClick={() => setActivityPanelView('actions')}
-                    >
-                      Actions
-                    </button>
-                  </div>
                 </div>
                 <button
                   type="button"
