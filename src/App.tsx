@@ -255,7 +255,9 @@ const loadPersistedJobs = (): JobEntry[] => {
 const savePersistedJobs = (jobs: JobEntry[]) => {
   try {
     window.localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(jobs))
-  } catch {}
+  } catch {
+    return
+  }
 }
 const DevinLogo = ({ size = 16 }: { size?: number }) => (
   <img src="/devin.png" alt="" aria-hidden="true" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
@@ -1405,6 +1407,7 @@ function App() {
   const dragLastSampleRef = useRef({ x: 0, y: 0, time: 0 })
   const toastTimeoutRef = useRef<number | null>(null)
   const pendingUndoRef = useRef<{ timeoutId: number; cancelled: boolean } | null>(null)
+  const commitSwipeRef = useRef<(direction: SwipeDirection) => void>(() => {})
   const nextJobIdRef = useRef(
     (() => {
       const persisted = loadPersistedJobs()
@@ -1876,7 +1879,9 @@ function App() {
           githubSearchScope: '',
         }),
       })
-    } catch {}
+    } catch {
+      return
+    }
   }
 
   const resetSyncedGithubFeedState = () => {
@@ -2888,6 +2893,7 @@ function App() {
       }, undoTimeoutMs)
     }, exitDurationMs)
   }
+  commitSwipeRef.current = commitSwipe
 
   const releaseDrag = () => {
     const horizontalDistanceThreshold = Math.max(86, window.innerWidth * 0.21)
@@ -3504,8 +3510,6 @@ function App() {
       })
       updateAction(actionId, { outcome: 'success' })
       watchMergeConflictResolution(pr, pullRequestKey)
-      if (sessionUrl) {
-          }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to create Devin session.'
@@ -3933,7 +3937,9 @@ function App() {
       } else {
         window.localStorage.setItem(GITHUB_SCOPE_STORAGE_KEY, githubSearchScope)
       }
-    } catch {}
+    } catch {
+      return
+    }
   }, [githubSearchScope])
 
   useEffect(() => {
@@ -4016,7 +4022,7 @@ function App() {
       }
 
       event.preventDefault()
-      commitSwipe(direction)
+      commitSwipeRef.current(direction)
     }
 
     window.addEventListener('keydown', handleDesktopKeyDown)
@@ -4026,7 +4032,6 @@ function App() {
   }, [
     activeTab,
     canTriggerDesktopSwipe,
-    commitSwipe,
     hasActiveGithubFeed,
     isCommentModalOpen,
     isCreateIssueModalOpen,
