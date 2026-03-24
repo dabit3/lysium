@@ -1433,6 +1433,7 @@ function App() {
   const [shipLaunchCount, setShipLaunchCount] = useState(0)
   const [hoverPreviewCard, setHoverPreviewCard] = useState<TriageCard | null>(null)
   const hoverPreviewTimerRef = useRef<number | null>(null)
+  const hoverPreviewDismissedAtRef = useRef(0)
   const [assessedIssueLookup, setAssessedIssueLookup] = useState<
     Record<string, AssessedIssueEntry>
   >(() => loadAssessedIssueLookup())
@@ -2955,12 +2956,14 @@ function App() {
       window.clearTimeout(hoverPreviewTimerRef.current)
       hoverPreviewTimerRef.current = null
     }
+    hoverPreviewDismissedAtRef.current = Date.now()
     setHoverPreviewCard(null)
   }, [])
 
   const handleCardMouseEnter = useCallback(
     (card: TriageCard) => {
       if (!isDesktopLayout) return
+      if (Date.now() - hoverPreviewDismissedAtRef.current < 500) return
       if (hoverPreviewTimerRef.current !== null) {
         window.clearTimeout(hoverPreviewTimerRef.current)
       }
