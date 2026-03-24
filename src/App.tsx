@@ -3875,6 +3875,7 @@ function App() {
     setAssessedPrLookup({})
     setJobs([])
     setGithubSearchScope('')
+    setHighlightColors({ ...DEFAULT_HIGHLIGHT_COLORS })
 
     if (typeof window === 'undefined') {
       return
