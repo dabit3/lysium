@@ -4127,6 +4127,7 @@ function App() {
         event.altKey ||
         isCommentModalOpen ||
         isCreateIssueModalOpen ||
+        hoverPreviewCard !== null ||
         isEditableTarget(event.target) ||
         !canTriggerDesktopSwipe
       ) {
@@ -4158,6 +4159,7 @@ function App() {
     activeTab,
     canTriggerDesktopSwipe,
     hasActiveGithubFeed,
+    hoverPreviewCard,
     isCommentModalOpen,
     isCreateIssueModalOpen,
     isDesktopLayout,

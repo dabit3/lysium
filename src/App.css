@@ -3645,7 +3645,7 @@
   font-family: var(--font-sans);
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--text-primary);
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
