@@ -286,6 +286,50 @@ const GITHUB_SCOPE_STORAGE_KEY = 'minion.github_scope.v1'
 const DEVINS_MACHINE_REPO_LABEL = "Devin's machine"
 const DEVIN_GITHUB_COMMENT_MENTION = '@devin-ai-integration'
 const JOBS_STORAGE_KEY = 'minion.jobs.v1'
+const HIGHLIGHT_COLOR_STORAGE_KEY = 'minion.highlight_colors.v1'
+
+const HIGHLIGHT_PRESETS: Array<{ label: string; value: string }> = [
+  { label: 'Blue', value: '#0086e4' },
+  { label: 'Violet', value: '#7c5cbf' },
+  { label: 'Rose', value: '#e44080' },
+  { label: 'Orange', value: '#e47a00' },
+  { label: 'Teal', value: '#0e9e8e' },
+  { label: 'Green', value: '#3fa34d' },
+  { label: 'Red', value: '#d94040' },
+]
+
+interface HighlightColors {
+  dark: string
+  light: string
+}
+
+const DEFAULT_HIGHLIGHT_COLORS: HighlightColors = {
+  dark: '#0086e4',
+  light: '#0086e4',
+}
+
+const loadHighlightColors = (): HighlightColors => {
+  try {
+    const raw = window.localStorage.getItem(HIGHLIGHT_COLOR_STORAGE_KEY)
+    if (!raw) return { ...DEFAULT_HIGHLIGHT_COLORS }
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_HIGHLIGHT_COLORS }
+    return {
+      dark: typeof parsed.dark === 'string' && parsed.dark.trim().length > 0 ? parsed.dark.trim() : DEFAULT_HIGHLIGHT_COLORS.dark,
+      light: typeof parsed.light === 'string' && parsed.light.trim().length > 0 ? parsed.light.trim() : DEFAULT_HIGHLIGHT_COLORS.light,
+    }
+  } catch {
+    return { ...DEFAULT_HIGHLIGHT_COLORS }
+  }
+}
+
+const saveHighlightColors = (colors: HighlightColors) => {
+  try {
+    window.localStorage.setItem(HIGHLIGHT_COLOR_STORAGE_KEY, JSON.stringify(colors))
+  } catch {
+    return
+  }
+}
 
 const loadPersistedJobs = (): JobEntry[] => {
   try {
@@ -1400,6 +1444,7 @@ function App() {
       (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
       'dark',
   )
+  const [highlightColors, setHighlightColors] = useState<HighlightColors>(() => loadHighlightColors())
   const [devinApiKey, setDevinApiKey] = useState(DEFAULT_DEVIN_API_KEY)
   const [devinOrgId, setDevinOrgId] = useState(DEFAULT_DEVIN_ORG_ID)
   const [devinCreateAsUserId, setDevinCreateAsUserId] = useState('')
@@ -3932,7 +3977,16 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = colorTheme
     localStorage.setItem('minion.theme', colorTheme)
-  }, [colorTheme])
+
+    if (colorTheme === 'aurora') {
+      document.documentElement.style.removeProperty('--accent-primary')
+      document.documentElement.style.removeProperty('--accent-highlight')
+    } else {
+      const activeColor = colorTheme === 'dark' ? highlightColors.dark : highlightColors.light
+      document.documentElement.style.setProperty('--accent-primary', activeColor)
+      document.documentElement.style.setProperty('--accent-highlight', activeColor)
+    }
+  }, [colorTheme, highlightColors])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -4751,6 +4805,15 @@ opens a PR.
     </motion.section>
   )
 
+  const handleHighlightColorChange = (color: string) => {
+    const themeKey = colorTheme === 'light' ? 'light' : 'dark'
+    const next = { ...highlightColors, [themeKey]: color }
+    setHighlightColors(next)
+    saveHighlightColors(next)
+  }
+
+  const activeHighlightColor = colorTheme === 'light' ? highlightColors.light : highlightColors.dark
+
   const renderThemeToggleSection = (sectionClassName?: string) => (
     <div className={`theme-toggle-section ${sectionClassName ?? ''}`.trim()}>
       <div className="auth-panel-header">
@@ -4779,6 +4842,24 @@ opens a PR.
           Aurora
         </button>
       </div>
+      {colorTheme !== 'aurora' ? (
+        <div className="highlight-color-section">
+          <span className="highlight-color-label">Highlight</span>
+          <div className="highlight-color-row">
+            {HIGHLIGHT_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                className={`highlight-swatch${activeHighlightColor === preset.value ? ' is-active' : ''}`}
+                style={{ '--swatch-color': preset.value } as React.CSSProperties}
+                onClick={() => handleHighlightColorChange(preset.value)}
+                aria-label={preset.label}
+                title={preset.label}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 
