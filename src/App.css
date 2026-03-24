@@ -3732,6 +3732,11 @@
     0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+[data-theme="light"] .hover-preview-body {
+  background: rgba(240, 240, 240, 0.58);
+  border-color: rgba(200, 200, 200, 0.74);
+}
+
 [data-theme="light"] .hover-preview-github-link:hover {
   background: rgba(0, 0, 0, 0.05);
 }
