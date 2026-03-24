@@ -2890,6 +2890,8 @@ function App() {
       return
     }
 
+    clearHoverPreview()
+
     if (pendingUndoRef.current) {
       window.clearTimeout(pendingUndoRef.current.timeoutId)
       pendingUndoRef.current = null
