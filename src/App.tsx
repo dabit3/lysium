@@ -4151,6 +4151,7 @@ function App() {
       }
 
       event.preventDefault()
+      clearHoverPreview()
       commitSwipeRef.current(direction)
     }
 
@@ -4161,6 +4162,7 @@ function App() {
   }, [
     activeTab,
     canTriggerDesktopSwipe,
+    clearHoverPreview,
     hasActiveGithubFeed,
     hoverPreviewCard,
     isCommentModalOpen,
