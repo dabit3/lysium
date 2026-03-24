@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import './App.css'
 
@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Github,
   Plus,
+  ExternalLink,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -1430,6 +1431,8 @@ function App() {
   const [repoRequestPrompt, setRepoRequestPrompt] = useState('')
   const [isCreatingRepoRequest, setIsCreatingRepoRequest] = useState(false)
   const [shipLaunchCount, setShipLaunchCount] = useState(0)
+  const [hoverPreviewCard, setHoverPreviewCard] = useState<TriageCard | null>(null)
+  const hoverPreviewTimerRef = useRef<number | null>(null)
   const [assessedIssueLookup, setAssessedIssueLookup] = useState<
     Record<string, AssessedIssueEntry>
   >(() => loadAssessedIssueLookup())
@@ -2947,6 +2950,35 @@ function App() {
   }
   commitSwipeRef.current = commitSwipe
 
+  const clearHoverPreview = useCallback(() => {
+    if (hoverPreviewTimerRef.current !== null) {
+      window.clearTimeout(hoverPreviewTimerRef.current)
+      hoverPreviewTimerRef.current = null
+    }
+    setHoverPreviewCard(null)
+  }, [])
+
+  const handleCardMouseEnter = useCallback(
+    (card: TriageCard) => {
+      if (!isDesktopLayout) return
+      if (hoverPreviewTimerRef.current !== null) {
+        window.clearTimeout(hoverPreviewTimerRef.current)
+      }
+      hoverPreviewTimerRef.current = window.setTimeout(() => {
+        hoverPreviewTimerRef.current = null
+        setHoverPreviewCard(card)
+      }, 420)
+    },
+    [isDesktopLayout],
+  )
+
+  const handleCardMouseLeave = useCallback(() => {
+    if (hoverPreviewTimerRef.current !== null) {
+      window.clearTimeout(hoverPreviewTimerRef.current)
+      hoverPreviewTimerRef.current = null
+    }
+  }, [])
+
   const releaseDrag = () => {
     const horizontalDistanceThreshold = Math.max(86, window.innerWidth * 0.21)
     const downwardDistanceThreshold = Math.max(14, window.innerHeight * 0.02)
@@ -3003,6 +3035,7 @@ function App() {
       return
     }
 
+    clearHoverPreview()
     pointerIdRef.current = event.pointerId
     dragStartRef.current = { x: event.clientX, y: event.clientY }
     dragLastSampleRef.current = { x: event.clientX, y: event.clientY, time: event.timeStamp }
@@ -5653,6 +5686,8 @@ opens a PR.
                       onPointerMove={isTopCard ? handlePointerMove : undefined}
                       onPointerUp={isTopCard ? handlePointerEnd : undefined}
                       onPointerCancel={isTopCard ? handlePointerEnd : undefined}
+                      onMouseEnter={isTopCard && isDesktopLayout ? () => handleCardMouseEnter(card) : undefined}
+                      onMouseLeave={isTopCard && isDesktopLayout ? handleCardMouseLeave : undefined}
                     >
                       {isTopCard && showSwipeOverlay ? (
                         <div
@@ -6149,6 +6184,144 @@ opens a PR.
                   <span>Create Issue</span>
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isDesktopLayout && hoverPreviewCard !== null ? (
+          <motion.div
+            key={`hover-preview-backdrop-${hoverPreviewCard.kind}-${hoverPreviewCard.id}`}
+            className="hover-preview-backdrop"
+            onClick={clearHoverPreview}
+            role="presentation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <motion.div
+              className="hover-preview-modal"
+              role="dialog"
+              aria-label={`Preview: ${hoverPreviewCard.title}`}
+              onClick={(event) => event.stopPropagation()}
+              onMouseLeave={clearHoverPreview}
+              initial={{ opacity: 0, y: 10, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 6, scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.8 }}
+            >
+              <header className="hover-preview-header">
+                <div className="hover-preview-meta">
+                  <img
+                    src={hoverPreviewCard.avatarUrl}
+                    alt={`${hoverPreviewCard.author} avatar`}
+                    className="avatar"
+                  />
+                  <span className="hover-preview-author">{hoverPreviewCard.author}</span>
+                  <span className="dot">•</span>
+                  <span className="hover-preview-timestamp">{hoverPreviewCard.timestamp}</span>
+                </div>
+                <a
+                  className="repo-name repo-name-link hover-preview-repo"
+                  href={`https://github.com/${normalizeRepoPath(hoverPreviewCard.repo)}`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {hoverPreviewCard.repo}
+                </a>
+              </header>
+
+              <h2 className="hover-preview-title">
+                <span className="hover-preview-type-badge">
+                  {hoverPreviewCard.kind === 'issue' ? 'Issue' : 'PR'} #{hoverPreviewCard.id}
+                </span>
+                {hoverPreviewCard.title}
+              </h2>
+
+              {hoverPreviewCard.kind === 'issue' && hoverPreviewCard.labels.length > 0 ? (
+                <div className="hover-preview-labels">
+                  {hoverPreviewCard.labels.map((label) => (
+                    <span key={label} className="issue-label">{label}</span>
+                  ))}
+                </div>
+              ) : null}
+
+              {hoverPreviewCard.kind === 'pullRequest' ? (
+                <div className="hover-preview-pr-stats">
+                  <span className="diff-add">+{hoverPreviewCard.additions}</span>
+                  <span className="diff-remove">-{hoverPreviewCard.deletions}</span>
+                  {hoverPreviewCard.checks.map((check) => (
+                    <span
+                      key={check.label}
+                      className={`check-pill ${check.passed ? 'passed' : 'pending'}`}
+                    >
+                      {check.passed ? '\u2713' : '\u2026'} {check.label}
+                    </span>
+                  ))}
+                  <span
+                    className={`ci-status ${hoverPreviewCard.checks.every((c) => c.passed) ? 'ok' : 'failed'}`}
+                  >
+                    {hoverPreviewCard.checks.every((c) => c.passed) ? 'CI passing' : 'CI failing'}
+                  </span>
+                </div>
+              ) : null}
+
+              <div className="hover-preview-body">
+                {buildCardMarkdownBlocks(hoverPreviewCard.summary).map((block, blockIndex) => {
+                  if (block.kind === 'code') {
+                    const codeTokens = highlightCodeTokens(block.content, block.language)
+                    return (
+                      <pre
+                        key={`hover-preview-md-${blockIndex}`}
+                        className="code-snippet"
+                      >
+                        <code>
+                          {codeTokens.map((token, tokenIndex) => (
+                            <span
+                              key={`hover-preview-md-${blockIndex}-token-${tokenIndex}`}
+                              className={
+                                token.tone === 'plain'
+                                  ? undefined
+                                  : `code-token ${token.tone}`
+                              }
+                            >
+                              {token.value}
+                            </span>
+                          ))}
+                        </code>
+                      </pre>
+                    )
+                  }
+                  return (
+                    <p
+                      key={`hover-preview-md-${blockIndex}`}
+                      className={`summary-line ${block.kind === 'heading' ? 'is-heading' : ''} ${block.kind === 'bullet' ? 'is-bullet' : ''}`.trim()}
+                    >
+                      {block.content}
+                    </p>
+                  )
+                })}
+              </div>
+
+              <footer className="hover-preview-footer">
+                <a
+                  className="hover-preview-github-link"
+                  href={
+                    normalizeRepoPath(hoverPreviewCard.repo)
+                      ? hoverPreviewCard.kind === 'issue'
+                        ? `https://github.com/${normalizeRepoPath(hoverPreviewCard.repo)}/issues/${hoverPreviewCard.id}`
+                        : `https://github.com/${normalizeRepoPath(hoverPreviewCard.repo)}/pull/${hoverPreviewCard.id}`
+                      : 'https://github.com'
+                  }
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  <ExternalLink size={13} />
+                  <span>View on GitHub</span>
+                </a>
+              </footer>
             </motion.div>
           </motion.div>
         ) : null}
