@@ -817,6 +817,43 @@
   font-family: var(--font-mono);
 }
 
+.stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
+.stats-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  white-space: nowrap;
+}
+
+.stats-value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.stats-value.stats-running {
+  color: var(--accent-primary);
+}
+
+.stats-sep {
+  color: var(--text-dim);
+  margin-inline: 0.1em;
+}
+
 .top-header {
   display: flex;
   align-items: center;

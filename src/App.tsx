@@ -1553,6 +1553,11 @@ function App() {
     (count, job) => count + (job.status === 'running' ? 1 : 0),
     0,
   )
+  const completedJobsCount = jobs.reduce(
+    (count, job) => count + (job.status === 'success' || job.status === 'failed' ? 1 : 0),
+    0,
+  )
+  const assessedCount = Object.keys(assessedIssueLookup).length + Object.keys(assessedPrLookup).length
   const hasActiveGithubFeed = hasSyncedGithubFeed && hasGithubOauthSession
   const desktopIssueCountLabel =
     isDesktopLayout && hasActiveGithubFeed ? `Issues (${issues.length})` : 'Issues'
@@ -5129,6 +5134,24 @@ opens a PR.
       ) : null}
 
       <main className="app-shell">
+        {hasActiveGithubFeed ? (
+          <div className="stats-row" role="status" aria-label="Live counts">
+            <span className="stats-cell">
+              <span className="stats-value">{issues.length}</span> issues
+              <span className="stats-sep">/</span>
+              <span className="stats-value">{pullRequests.length}</span> PRs
+            </span>
+            <span className="stats-cell">
+              <span className="stats-value stats-running">{runningJobsCount}</span> running
+              <span className="stats-sep">/</span>
+              <span className="stats-value">{completedJobsCount}</span> completed
+            </span>
+            <span className="stats-cell">
+              <span className="stats-value">{assessedCount}</span> assessed
+            </span>
+          </div>
+        ) : null}
+
         {!isDesktopLayout && hasActiveGithubFeed ? (
           <header className="top-header">
             <div className="top-toggle" aria-label="Select triage mode">
