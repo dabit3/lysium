@@ -4053,7 +4053,7 @@ function App() {
     savePersistedJobs(jobs)
   }, [jobs])
 
-  const pollJobStatusesRef = useRef<() => Promise<void>>()
+  const pollJobStatusesRef = useRef<() => Promise<void>>(undefined)
   pollJobStatusesRef.current = async () => {
     const pollableJobs = jobs.filter(
       (job) => job.sessionUrl && !isTerminalDevinStatus(job.devinStatus),
