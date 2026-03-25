@@ -1395,11 +1395,11 @@ function App() {
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
-  const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
-    () =>
-      (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
-      'dark',
-  )
+    const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora' | 'matrix'>(
+      () =>
+        (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora' | 'matrix') ??
+        'dark',
+    )
   const [devinApiKey, setDevinApiKey] = useState(DEFAULT_DEVIN_API_KEY)
   const [devinOrgId, setDevinOrgId] = useState(DEFAULT_DEVIN_ORG_ID)
   const [devinCreateAsUserId, setDevinCreateAsUserId] = useState('')
@@ -4782,6 +4782,13 @@ opens a PR.
           onClick={() => setColorTheme('aurora')}
         >
           Aurora
+        </button>
+        <button
+          type="button"
+          className={`theme-option${colorTheme === 'matrix' ? ' is-active' : ''}`}
+          onClick={() => setColorTheme('matrix')}
+        >
+          Matrix
         </button>
       </div>
     </div>
