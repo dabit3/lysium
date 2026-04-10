@@ -150,10 +150,18 @@ describe('checkRateLimit', () => {
   it('cleans up expired entries after the cleanup interval', () => {
     vi.useFakeTimers()
 
+    // beforeEach left lastCleanup ~120s in the future (relative to fake
+    // clock). Advance past it + CLEANUP_INTERVAL_MS so the cleanup guard
+    // (now - lastCleanup >= 60_000) can pass, then make a warmup call to
+    // reset lastCleanup to the current fake time.
+    vi.advanceTimersByTime(200_000)
+    checkRateLimit(fakeReq('__cleanup_warmup__'), { windowMs: 1, max: 999 })
+
     const opts = { max: 1, windowMs: 5_000 }
     checkRateLimit(fakeReq('10.0.0.30'), opts)
 
-    // Advance past the window AND the cleanup interval (60s)
+    // Advance past the window AND the cleanup interval (60s) so cleanup
+    // actually runs and prunes the stale entry from the internal Map.
     vi.advanceTimersByTime(65_000)
 
     // The entry should be cleaned up; a new request is allowed
