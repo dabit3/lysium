@@ -68,7 +68,6 @@ interface JobEntry {
   statusDetail?: string
 }
 
-
 interface AssessedIssueEntry {
   assessedAt: number
   sessionUrl?: string
@@ -1386,6 +1385,7 @@ function App() {
   const [jobs, setJobs] = useState<JobEntry[]>(() => loadPersistedJobs())
   const [isJobsOpen, setIsJobsOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isKeyboardShortcutsHelpOpen, setIsKeyboardShortcutsHelpOpen] = useState(false)
   const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_LAYOUT_MEDIA_QUERY).matches,
   )
@@ -1430,6 +1430,8 @@ function App() {
   const [repoRequestPrompt, setRepoRequestPrompt] = useState('')
   const [isCreatingRepoRequest, setIsCreatingRepoRequest] = useState(false)
   const [shipLaunchCount, setShipLaunchCount] = useState(0)
+  const [triageSearchQuery, setTriageSearchQuery] = useState('')
+  const [triageRepoFilter, setTriageRepoFilter] = useState('')
   const [assessedIssueLookup, setAssessedIssueLookup] = useState<
     Record<string, AssessedIssueEntry>
   >(() => loadAssessedIssueLookup())
@@ -1467,12 +1469,14 @@ function App() {
     ((options?: { autoTriggered?: boolean }) => Promise<void>) | null
   >(null)
   const hasAttemptedStartupSyncRef = useRef(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const handleAssessNecessityRef = useRef<(() => Promise<void>) | null>(null)
+  const handleAssessPullRequestMergeDecisionRef = useRef<(() => Promise<void>) | null>(null)
+  const handleOpenCommentModalRef = useRef<(() => void) | null>(null)
+  const handleOpenCreateIssueModalRef = useRef<(() => void) | null>(null)
+  const handleDesktopNavTabSelectRef = useRef<((tab: TabKey) => void) | null>(null)
   const prefersReducedMotion = useReducedMotion()
 
-  const activeDeck =
-    activeTab === 'issues' ? issues : activeTab === 'pullRequests' ? pullRequests : []
-  const topCard = activeDeck[0]
-  const visibleCards = activeDeck.slice(0, 3)
   const availableRepos = useMemo(() => {
     const repoSet = new Set<string>()
 
@@ -1512,8 +1516,42 @@ function App() {
 
     return availableRepos.filter((repo) => repo.toLowerCase().includes(normalizedFilter))
   }, [availableRepos, createIssueRepoQuery])
-  const activeIssue = issues[0]
-  const activePr = pullRequests[0]
+  const filteredIssues = useMemo(() => {
+    const normalizedSearch = triageSearchQuery.trim().toLowerCase()
+    const normalizedRepoFilter = triageRepoFilter.trim().toLowerCase()
+    
+    return issues.filter((issue) => {
+      const matchesSearch = !normalizedSearch || 
+        issue.title.toLowerCase().includes(normalizedSearch) ||
+        issue.summary.some(line => line.toLowerCase().includes(normalizedSearch))
+      
+      const matchesRepo = !normalizedRepoFilter ||
+        normalizeRepoPath(issue.repo).toLowerCase() === normalizedRepoFilter
+      
+      return matchesSearch && matchesRepo
+    })
+  }, [issues, triageSearchQuery, triageRepoFilter])
+  const filteredPullRequests = useMemo(() => {
+    const normalizedSearch = triageSearchQuery.trim().toLowerCase()
+    const normalizedRepoFilter = triageRepoFilter.trim().toLowerCase()
+    
+    return pullRequests.filter((pr) => {
+      const matchesSearch = !normalizedSearch || 
+        pr.title.toLowerCase().includes(normalizedSearch) ||
+        pr.summary.some(line => line.toLowerCase().includes(normalizedSearch))
+      
+      const matchesRepo = !normalizedRepoFilter ||
+        normalizeRepoPath(pr.repo).toLowerCase() === normalizedRepoFilter
+      
+      return matchesSearch && matchesRepo
+    })
+  }, [pullRequests, triageSearchQuery, triageRepoFilter])
+  const activeDeck =
+    activeTab === 'issues' ? filteredIssues : activeTab === 'pullRequests' ? filteredPullRequests : []
+  const topCard = activeDeck[0]
+  const visibleCards = activeDeck.slice(0, 3)
+  const activeIssue = filteredIssues[0]
+  const activePr = filteredPullRequests[0]
   const activeIssueAssessmentKey = activeIssue ? toIssueAssessmentKey(activeIssue) : ''
   const activeIssueAssessmentEntry = activeIssueAssessmentKey
     ? assessedIssueLookup[activeIssueAssessmentKey]
@@ -1555,9 +1593,9 @@ function App() {
   )
   const hasActiveGithubFeed = hasSyncedGithubFeed && hasGithubOauthSession
   const desktopIssueCountLabel =
-    isDesktopLayout && hasActiveGithubFeed ? `Issues (${issues.length})` : 'Issues'
+    isDesktopLayout && hasActiveGithubFeed ? `Issues (${filteredIssues.length})` : 'Issues'
   const desktopPullRequestCountLabel =
-    isDesktopLayout && hasActiveGithubFeed ? `PRs (${pullRequests.length})` : 'PRs'
+    isDesktopLayout && hasActiveGithubFeed ? `PRs (${filteredPullRequests.length})` : 'PRs'
   const desktopSwipeTab: TabKey = activeTab === 'issues' ? 'issues' : 'pullRequests'
   const desktopLeftSwipeAction =
     activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'left')
@@ -3155,6 +3193,8 @@ function App() {
     }
   }
 
+  handleAssessNecessityRef.current = handleAssessNecessity
+
   const handleCreateRepoPullRequest = async () => {
     if (isCreatingRepoRequest) {
       return
@@ -3351,6 +3391,8 @@ function App() {
       setIsAssessingPullRequest(false)
     }
   }
+
+  handleAssessPullRequestMergeDecisionRef.current = handleAssessPullRequestMergeDecision
 
   const watchMergeConflictResolution = (
     pullRequest: PullRequestCard,
@@ -3593,6 +3635,8 @@ function App() {
     setIsCommentModalOpen(true)
   }
 
+  handleOpenCommentModalRef.current = handleOpenCommentModal
+
   const handleTagDevinInComment = () => {
     setCommentBody((previous) => {
       const normalized = previous.trim()
@@ -3666,6 +3710,8 @@ function App() {
     setCreateIssueBody('')
     setIsCreateIssueModalOpen(true)
   }
+
+  handleOpenCreateIssueModalRef.current = handleOpenCreateIssueModal
 
   const handleSubmitCreateIssue = async () => {
     const repo = createIssueRepo.trim()
@@ -3929,6 +3975,8 @@ function App() {
     handleTabChange(nextTab)
   }
 
+  handleDesktopNavTabSelectRef.current = handleDesktopNavTabSelect
+
   useEffect(() => {
     document.documentElement.dataset.theme = colorTheme
     localStorage.setItem('minion.theme', colorTheme)
@@ -4128,6 +4176,179 @@ function App() {
     isCommentModalOpen,
     isCreateIssueModalOpen,
     isDesktopLayout,
+  ])
+
+  useEffect(() => {
+    if (!isDesktopLayout) {
+      return
+    }
+
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isEditableTarget(event.target)
+      ) {
+        return
+      }
+
+      const key = event.key
+
+      // Tab navigation
+      if (key === '1' && hasActiveGithubFeed) {
+        event.preventDefault()
+        handleDesktopNavTabSelectRef.current?.('code')
+        return
+      }
+      if (key === '2' && hasActiveGithubFeed) {
+        event.preventDefault()
+        handleDesktopNavTabSelectRef.current?.('issues')
+        return
+      }
+      if (key === '3' && hasActiveGithubFeed) {
+        event.preventDefault()
+        handleDesktopNavTabSelectRef.current?.('pullRequests')
+        return
+      }
+
+      // Panel toggles
+      if (key === 'a' || key === 'A') {
+        if (hasActiveGithubFeed && !isDesktopWideLayout) {
+          event.preventDefault()
+          setIsDesktopActivityOpen((prev) => {
+            const next = !prev
+            if (next) {
+              setIsSettingsOpen(false)
+            }
+            return next
+          })
+        }
+        return
+      }
+
+      if (key === 's' || key === 'S') {
+        if (hasActiveGithubFeed) {
+          event.preventDefault()
+          setIsSettingsOpen((prev) => {
+            const next = !prev
+            if (next && isDesktopWideLayout) {
+              setIsDesktopActivityOpen(false)
+            }
+            return next
+          })
+        }
+        return
+      }
+
+      if (key === '?' || key === '/') {
+        event.preventDefault()
+        setIsKeyboardShortcutsHelpOpen((prev) => !prev)
+        return
+      }
+
+      // Common actions
+      if (key === 'r' || key === 'R') {
+        if (hasActiveGithubFeed && canSyncGithubFeed && !isSyncingGithubFeed) {
+          event.preventDefault()
+          void syncGithubFeedRef.current?.()
+        }
+        return
+      }
+
+      if ((key === 'f' || key === 'F') && (activeTab === 'issues' || activeTab === 'pullRequests')) {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+        return
+      }
+
+      if ((key === 'c' || key === 'C') && (activeTab === 'issues' || activeTab === 'pullRequests')) {
+        if (!isCommentModalOpen && topCard) {
+          event.preventDefault()
+          handleOpenCommentModalRef.current?.()
+        }
+        return
+      }
+
+      if ((key === 'n' || key === 'N') && activeTab === 'issues') {
+        if (!isCreateIssueModalOpen) {
+          event.preventDefault()
+          handleOpenCreateIssueModalRef.current?.()
+        }
+        return
+      }
+
+      // Assess actions
+      if ((key === 'e' || key === 'E') && activeTab === 'issues') {
+        if (!isAssessingIssue && activeIssue && !isActiveIssueAssessed) {
+          event.preventDefault()
+          void handleAssessNecessityRef.current?.()
+        }
+        return
+      }
+
+      if ((key === 'e' || key === 'E') && activeTab === 'pullRequests') {
+        if (activePr && !isActivePrAssessed && !isAssessingPullRequest) {
+          event.preventDefault()
+          void handleAssessPullRequestMergeDecisionRef.current?.()
+        }
+        return
+      }
+
+      // Escape to close modals
+      if (key === 'Escape') {
+        if (isKeyboardShortcutsHelpOpen) {
+          event.preventDefault()
+          setIsKeyboardShortcutsHelpOpen(false)
+          return
+        }
+        if (isCommentModalOpen) {
+          event.preventDefault()
+          setIsCommentModalOpen(false)
+          return
+        }
+        if (isCreateIssueModalOpen) {
+          event.preventDefault()
+          setIsCreateIssueModalOpen(false)
+          return
+        }
+        if (isSettingsOpen) {
+          event.preventDefault()
+          setIsSettingsOpen(false)
+          return
+        }
+        if (isDesktopActivityOpen) {
+          event.preventDefault()
+          setIsDesktopActivityOpen(false)
+          return
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown)
+    }
+  }, [
+    isDesktopLayout,
+    hasActiveGithubFeed,
+    activeTab,
+    canSyncGithubFeed,
+    isSyncingGithubFeed,
+    isCommentModalOpen,
+    isCreateIssueModalOpen,
+    isSettingsOpen,
+    isDesktopWideLayout,
+    isDesktopActivityOpen,
+    isKeyboardShortcutsHelpOpen,
+    isAssessingIssue,
+    isActiveIssueAssessed,
+    isAssessingPullRequest,
+    isActivePrAssessed,
+    activeIssue,
+    activePr,
+    topCard,
   ])
 
   useEffect(() => {
@@ -5155,6 +5376,35 @@ opens a PR.
               </button>
             </div>
 
+            {(activeTab === 'issues' || activeTab === 'pullRequests') && (
+              <div className="triage-filter-bar">
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  className="triage-search-input"
+                  value={triageSearchQuery}
+                  onChange={(event) => setTriageSearchQuery(event.target.value)}
+                  placeholder="Search title and body..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                />
+                <select
+                  className="triage-repo-filter"
+                  value={triageRepoFilter}
+                  onChange={(event) => setTriageRepoFilter(event.target.value)}
+                >
+                  <option value="">All repositories</option>
+                  {availableRepos.map((repo) => (
+                    <option key={repo} value={repo}>
+                      {repo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="top-utility-actions" aria-label="Secondary actions">
               <button
                 type="button"
@@ -5246,6 +5496,15 @@ opens a PR.
                   aria-pressed={isSettingsOpen}
                 >
                   Settings
+                </button>
+                <button
+                  type="button"
+                  className="desktop-nav-button keyboard-shortcuts-hint"
+                  onClick={() => setIsKeyboardShortcutsHelpOpen(true)}
+                  aria-label="Keyboard shortcuts"
+                  title="Keyboard shortcuts (press ?)"
+                >
+                  ?
                 </button>
               </nav>
               {canTriggerDesktopSwipe ? (
@@ -5515,6 +5774,34 @@ opens a PR.
         ) : (
           <section className="deck-shell" key={`tab-${activeTab}`}>
             <div className="deck-frame deck-frame-swipe">
+              {(activeTab === 'issues' || activeTab === 'pullRequests') && (
+                <div className="triage-filter-bar desktop-triage-filter">
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    className="triage-search-input"
+                    value={triageSearchQuery}
+                    onChange={(event) => setTriageSearchQuery(event.target.value)}
+                    placeholder="Search title and body..."
+                    autoComplete="off"
+                    spellCheck={false}
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                  />
+                  <select
+                    className="triage-repo-filter"
+                    value={triageRepoFilter}
+                    onChange={(event) => setTriageRepoFilter(event.target.value)}
+                  >
+                    <option value="">All repositories</option>
+                    {availableRepos.map((repo) => (
+                      <option key={repo} value={repo}>
+                        {repo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {visibleCards.length === 0 ? (
                 <div className="empty-state">
                   <p>
@@ -6147,6 +6434,118 @@ opens a PR.
                     <span className="spinner" aria-hidden="true" />
                   ) : null}
                   <span>Create Issue</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isKeyboardShortcutsHelpOpen ? (
+          <motion.div
+            key="keyboard-shortcuts-backdrop"
+            className="modal-backdrop"
+            onClick={() => setIsKeyboardShortcutsHelpOpen(false)}
+            role="presentation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={drawerBackdropTransition}
+          >
+            <motion.div
+              className="comment-modal keyboard-shortcuts-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Keyboard shortcuts"
+              onClick={(event) => event.stopPropagation()}
+              initial={commentModalInitial}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ ...commentModalExit, transition: commentModalExitTransition }}
+              transition={commentModalTransition}
+            >
+              <h3>Keyboard Shortcuts</h3>
+              <p className="modal-caption">Desktop power user shortcuts</p>
+
+              <div className="keyboard-shortcuts-section">
+                <h4>Navigation</h4>
+                <div className="keyboard-shortcut-list">
+                  <div className="keyboard-shortcut-item">
+                    <kbd>1</kbd>
+                    <span>Switch to Code tab</span>
+                  </div>
+                  <div className="keyboard-shortcut-item">
+                    <kbd>2</kbd>
+                    <span>Switch to Issues tab</span>
+                  </div>
+                  <div className="keyboard-shortcut-item">
+                    <kbd>3</kbd>
+                    <span>Switch to Pull Requests tab</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="keyboard-shortcuts-section">
+                <h4>Panels</h4>
+                <div className="keyboard-shortcut-list">
+                  <div className="keyboard-shortcut-item">
+                    <kbd>A</kbd>
+                    <span>Toggle Activity panel</span>
+                  </div>
+                  <div className="keyboard-shortcut-item">
+                    <kbd>S</kbd>
+                    <span>Toggle Settings</span>
+                  </div>
+                  <div className="keyboard-shortcut-item">
+                    <kbd>?</kbd> / <kbd>/</kbd>
+                    <span>Show this help</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="keyboard-shortcuts-section">
+                <h4>Actions</h4>
+                <div className="keyboard-shortcut-list">
+                  <div className="keyboard-shortcut-item">
+                    <kbd>R</kbd>
+                    <span>Refresh feed</span>
+                  </div>
+                  <div className="keyboard-shortcut-item">
+                    <kbd>F</kbd>
+                    <span>Focus search</span>
+                  </div>
+                  <div className="keyboard-shortcut-item">
+                    <kbd>C</kbd>
+                    <span>Leave comment</span>
+                  </div>
+                  <div className="keyboard-shortcut-item">
+                    <kbd>N</kbd>
+                    <span>Create new issue</span>
+                  </div>
+                  <div className="keyboard-shortcut-item">
+                    <kbd>E</kbd>
+                    <span>Assess issue/PR</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="keyboard-shortcuts-section">
+                <h4>General</h4>
+                <div className="keyboard-shortcut-list">
+                  <div className="keyboard-shortcut-item">
+                    <kbd>Escape</kbd>
+                    <span>Close modals/panels</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="fab-button primary"
+                  onClick={() => setIsKeyboardShortcutsHelpOpen(false)}
+                >
+                  Got it
                 </button>
               </div>
             </motion.div>
