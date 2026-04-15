@@ -14,6 +14,9 @@ import {
   RefreshCw,
   Github,
   Plus,
+  List,
+  CheckSquare,
+  Square,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -1445,6 +1448,9 @@ function App() {
   const [mergeConflictResolutionLookup, setMergeConflictResolutionLookup] = useState<
     Record<string, 'running' | 'resolved'>
   >({})
+  const [isBulkMode, setIsBulkMode] = useState(false)
+  const [bulkSelectedKeys, setBulkSelectedKeys] = useState<Set<string>>(new Set())
+  const [isBulkActionRunning, setIsBulkActionRunning] = useState(false)
   const pointerIdRef = useRef<number | null>(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const dragOffsetRef = useRef({ x: 0, y: 0 })
@@ -3824,6 +3830,392 @@ function App() {
     }
   }
 
+  const toggleBulkMode = () => {
+    setIsBulkMode((previous) => {
+      if (!previous) {
+        setBulkSelectedKeys(new Set())
+      }
+      return !previous
+    })
+  }
+
+  const toggleBulkSelect = (cardKey: string) => {
+    setBulkSelectedKeys((previous) => {
+      const next = new Set(previous)
+      if (next.has(cardKey)) {
+        next.delete(cardKey)
+      } else {
+        next.add(cardKey)
+      }
+      return next
+    })
+  }
+
+  const bulkSelectAll = () => {
+    const deck = activeTab === 'issues' ? issues : pullRequests
+    const allKeys = new Set(deck.map((card) => toIssueAssessmentKey(card)).filter((key) => key.length > 0))
+    setBulkSelectedKeys(allKeys)
+  }
+
+  const bulkDeselectAll = () => {
+    setBulkSelectedKeys(new Set())
+  }
+
+  const getBulkSelectedCards = (): TriageCard[] => {
+    const deck: TriageCard[] = activeTab === 'issues' ? issues : pullRequests
+    return deck.filter((card) => {
+      const key = toIssueAssessmentKey(card)
+      return key.length > 0 && bulkSelectedKeys.has(key)
+    })
+  }
+
+  const handleBulkSkip = () => {
+    const selectedCards = getBulkSelectedCards()
+    if (selectedCards.length === 0) {
+      showToast('No items selected.')
+      return
+    }
+
+    const selectedKeySet = new Set(selectedCards.map((card) => toIssueAssessmentKey(card)))
+    if (activeTab === 'issues') {
+      setIssues((previous) => {
+        const kept = previous.filter((card) => !selectedKeySet.has(toIssueAssessmentKey(card)))
+        const skipped = previous.filter((card) => selectedKeySet.has(toIssueAssessmentKey(card)))
+        return [...kept, ...skipped]
+      })
+    } else {
+      setPullRequests((previous) => {
+        const kept = previous.filter((card) => !selectedKeySet.has(toIssueAssessmentKey(card)))
+        const skipped = previous.filter((card) => selectedKeySet.has(toIssueAssessmentKey(card)))
+        return [...kept, ...skipped]
+      })
+    }
+
+    const kind = activeTab === 'issues' ? 'issue' : 'PR'
+    showToast(`Skipped ${selectedCards.length} ${kind}${selectedCards.length === 1 ? '' : 's'}.`)
+    selectedCards.forEach((card) => {
+      addAction(`Skipped ${kind} #${card.id}`, 'success')
+    })
+    setBulkSelectedKeys(new Set())
+  }
+
+  const handleBulkClose = async () => {
+    const selectedCards = getBulkSelectedCards()
+    if (selectedCards.length === 0) {
+      showToast('No items selected.')
+      return
+    }
+
+    setIsBulkActionRunning(true)
+    const kind = activeTab === 'issues' ? 'issue' : 'PR'
+    showToast(`Closing ${selectedCards.length} ${kind}${selectedCards.length === 1 ? '' : 's'}...`)
+
+    let successCount = 0
+    let failCount = 0
+
+    for (const card of selectedCards) {
+      const actionId = addAction(`Close ${kind} #${card.id} on GitHub`, 'pending')
+      const jobId = addJob(`Close ${kind}`, `${card.repo} #${card.id}`)
+
+      try {
+        if (activeTab === 'issues') {
+          await closeGithubIssue(card.repo, card.id)
+        } else {
+          await closeGithubPullRequest(card.repo, card.id)
+        }
+        updateJob(jobId, {
+          status: 'success',
+          message: `${kind} #${card.id} closed on GitHub.`,
+          retryable: false,
+        })
+        updateAction(actionId, { outcome: 'success' })
+        successCount += 1
+      } catch (error) {
+        const message = error instanceof Error ? error.message : `Unable to close ${kind} on GitHub.`
+        updateJob(jobId, {
+          status: 'failed',
+          message: `Close ${kind} failed: ${message}`,
+          retryable: false,
+        })
+        updateAction(actionId, { outcome: 'failed' })
+        failCount += 1
+      }
+    }
+
+    const selectedKeySet = new Set(selectedCards.map((card) => toIssueAssessmentKey(card)))
+    if (activeTab === 'issues') {
+      setIssues((previous) => previous.filter((card) => !selectedKeySet.has(toIssueAssessmentKey(card))))
+    } else {
+      setPullRequests((previous) => previous.filter((card) => !selectedKeySet.has(toIssueAssessmentKey(card))))
+    }
+
+    setBulkSelectedKeys(new Set())
+    setIsBulkActionRunning(false)
+
+    if (failCount === 0) {
+      showToast(`Closed ${successCount} ${kind}${successCount === 1 ? '' : 's'}.`)
+    } else {
+      showToast(`Closed ${successCount}, failed ${failCount}. Check Activity for details.`)
+    }
+  }
+
+  const handleBulkCreatePr = async () => {
+    const selectedCards = getBulkSelectedCards()
+    if (selectedCards.length === 0) {
+      showToast('No items selected.')
+      return
+    }
+
+    setIsBulkActionRunning(true)
+    showToast(`Creating PRs for ${selectedCards.length} issue${selectedCards.length === 1 ? '' : 's'}...`)
+
+    let successCount = 0
+    let failCount = 0
+
+    for (const card of selectedCards) {
+      const actionId = addAction(`Create PR from issue #${card.id}`, 'pending')
+      const prompt = [
+        `You are triaging issue #${card.id} in repository ${card.repo}.`,
+        'Create a finished pull request that resolves the issue with minimal risk and clear tests.',
+        'Share the PR link plus a concise implementation summary.',
+        'Issue context:',
+        formatCardContext(card),
+      ].join('\n\n')
+      const jobId = addJob('Create PR', `${card.repo} #${card.id}`, {
+        retryable: true,
+        retryPrompt: prompt,
+      })
+
+      try {
+        const session = await createDevinSession(prompt)
+        const sessionUrl =
+          typeof session.url === 'string' && session.url.trim().length > 0
+            ? session.url.trim()
+            : undefined
+        updateJob(jobId, {
+          status: 'success',
+          message: `Devin session started. ${formatSessionReference(session)}`,
+          retryable: false,
+          retryPrompt: undefined,
+          sessionUrl,
+        })
+        updateAction(actionId, { outcome: 'success' })
+        successCount += 1
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to create Devin session.'
+        updateJob(jobId, {
+          status: 'failed',
+          message: `Create PR request failed: ${message}`,
+          retryable: true,
+        })
+        updateAction(actionId, { outcome: 'failed' })
+        failCount += 1
+      }
+    }
+
+    const selectedKeySet = new Set(selectedCards.map((card) => toIssueAssessmentKey(card)))
+    setIssues((previous) => previous.filter((card) => !selectedKeySet.has(toIssueAssessmentKey(card))))
+    setBulkSelectedKeys(new Set())
+    setIsBulkActionRunning(false)
+
+    if (failCount === 0) {
+      showToast(`Created ${successCount} PR session${successCount === 1 ? '' : 's'}. Check Activity.`)
+    } else {
+      showToast(`Created ${successCount}, failed ${failCount}. Check Activity for details.`)
+    }
+  }
+
+  const handleBulkMerge = async () => {
+    const selectedCards = getBulkSelectedCards().filter(
+      (card): card is PullRequestCard => card.kind === 'pullRequest',
+    )
+    if (selectedCards.length === 0) {
+      showToast('No pull requests selected.')
+      return
+    }
+
+    setIsBulkActionRunning(true)
+    showToast(`Merging ${selectedCards.length} PR${selectedCards.length === 1 ? '' : 's'}...`)
+
+    let mergedCount = 0
+    let autoMergeCount = 0
+    let failCount = 0
+
+    for (const card of selectedCards) {
+      const hasBlockingChecks = card.checks.some((check) => !check.passed)
+
+      if (!hasBlockingChecks) {
+        const actionId = addAction(`Merge PR #${card.id} on GitHub`, 'pending')
+        const jobId = addJob('Merge PR', `${card.repo} #${card.id}`)
+
+        try {
+          await mergeGithubPullRequest(card.repo, card.id)
+          updateJob(jobId, {
+            status: 'success',
+            message: `PR #${card.id} merged on GitHub.`,
+            retryable: false,
+          })
+          updateAction(actionId, { outcome: 'success' })
+          mergedCount += 1
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unable to merge pull request.'
+          updateJob(jobId, {
+            status: 'failed',
+            message: `Merge PR failed: ${message}`,
+            retryable: false,
+          })
+          updateAction(actionId, { outcome: 'failed' })
+          failCount += 1
+        }
+      } else {
+        const actionId = addAction(`Enroll auto-merge for PR #${card.id}`, 'pending')
+        const prompt = [
+          `Checks are currently blocking merge for pull request #${card.id} in ${card.repo}.`,
+          'Attempt auto-merge enrollment when policy permits and summarize the outcome.',
+          'If enrollment is blocked, explain which permission or check is preventing it.',
+          'Pull request context:',
+          formatCardContext(card),
+        ].join('\n\n')
+        const jobId = addJob('Auto-merge enrollment', `${card.repo} #${card.id}`, {
+          retryable: true,
+          retryPrompt: prompt,
+        })
+
+        try {
+          const session = await createDevinSession(prompt)
+          updateJob(jobId, {
+            status: 'success',
+            message: `Auto-merge workflow started. ${formatSessionReference(session)}`,
+            retryable: false,
+            retryPrompt: undefined,
+          })
+          updateAction(actionId, { outcome: 'success' })
+          autoMergeCount += 1
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unable to create Devin session.'
+          updateJob(jobId, {
+            status: 'failed',
+            message: `Auto-merge enrollment failed: ${message}`,
+            retryable: true,
+          })
+          updateAction(actionId, { outcome: 'failed' })
+          failCount += 1
+        }
+      }
+    }
+
+    const selectedKeySet = new Set(selectedCards.map((card) => toIssueAssessmentKey(card)))
+    setPullRequests((previous) => previous.filter((card) => !selectedKeySet.has(toIssueAssessmentKey(card))))
+    setBulkSelectedKeys(new Set())
+    setIsBulkActionRunning(false)
+
+    const parts: string[] = []
+    if (mergedCount > 0) parts.push(`${mergedCount} merged`)
+    if (autoMergeCount > 0) parts.push(`${autoMergeCount} auto-merge enrolled`)
+    if (failCount > 0) parts.push(`${failCount} failed`)
+    showToast(parts.join(', ') + '. Check Activity.')
+  }
+
+  const handleBulkAssess = async () => {
+    const selectedCards = getBulkSelectedCards()
+    if (selectedCards.length === 0) {
+      showToast('No items selected.')
+      return
+    }
+
+    setIsBulkActionRunning(true)
+    const isIssueTab = activeTab === 'issues'
+    const kind = isIssueTab ? 'issue' : 'PR'
+    showToast(`Assessing ${selectedCards.length} ${kind}${selectedCards.length === 1 ? '' : 's'}...`)
+
+    let successCount = 0
+    let failCount = 0
+    let skippedCount = 0
+
+    for (const card of selectedCards) {
+      const assessmentKey = toIssueAssessmentKey(card)
+      const lookup = isIssueTab ? assessedIssueLookup : assessedPrLookup
+      if (assessmentKey && lookup[assessmentKey] !== undefined) {
+        skippedCount += 1
+        continue
+      }
+
+      const prompt = isIssueTab
+        ? [
+            `Assess issue #${card.id} in ${card.repo}.`,
+            'Decide whether the issue is actionable now. Return a verdict, rationale, and next maintainers step.',
+            'Issue context:',
+            formatCardContext(card),
+          ].join('\n\n')
+        : [
+            `Assess pull request #${card.id} in ${card.repo}.`,
+            'Decide whether this PR should be merged now.',
+            'Return: recommendation (merge / request changes / do not merge), rationale, blocking risks, and concrete next steps.',
+            'Pull request context:',
+            formatCardContext(card),
+          ].join('\n\n')
+
+      const jobLabel = isIssueTab ? 'Assess Necessity' : 'Assess Merge Decision'
+      const actionId = addAction(`${jobLabel} for ${kind} #${card.id}`, 'pending')
+      const jobId = addJob(jobLabel, `${card.repo} #${card.id}`, {
+        retryable: true,
+        retryPrompt: prompt,
+      })
+
+      try {
+        const session = await createDevinSession(prompt, { skipCreateAsUserId: true })
+        const sessionUrl =
+          typeof session.url === 'string' && session.url.trim().length > 0
+            ? session.url.trim()
+            : undefined
+        const sessionId =
+          typeof session.session_id === 'string' && session.session_id.trim().length > 0
+            ? session.session_id.trim()
+            : toSessionIdFromSessionUrl(sessionUrl)
+        updateJob(jobId, {
+          status: 'success',
+          message: `Assessment session started. ${formatSessionReference(session)}`,
+          retryable: false,
+          retryPrompt: undefined,
+          sessionUrl,
+        })
+
+        const setter = isIssueTab ? setAssessedIssueLookup : setAssessedPrLookup
+        if (assessmentKey) {
+          setter((previous) => ({
+            ...previous,
+            [assessmentKey]: {
+              assessedAt: Date.now(),
+              sessionUrl,
+              sessionId: sessionId ?? toSessionIdFromSessionUrl(sessionUrl),
+            },
+          }))
+        }
+
+        updateAction(actionId, { outcome: 'success' })
+        successCount += 1
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to create Devin session.'
+        updateJob(jobId, {
+          status: 'failed',
+          message: `${jobLabel} failed: ${message}`,
+          retryable: true,
+        })
+        updateAction(actionId, { outcome: 'failed' })
+        failCount += 1
+      }
+    }
+
+    setBulkSelectedKeys(new Set())
+    setIsBulkActionRunning(false)
+
+    const parts: string[] = []
+    if (successCount > 0) parts.push(`${successCount} assessed`)
+    if (skippedCount > 0) parts.push(`${skippedCount} already assessed`)
+    if (failCount > 0) parts.push(`${failCount} failed`)
+    showToast(parts.join(', ') + '. Check Activity.')
+  }
+
   const clearLocalAppData = (options?: { showToast?: boolean }) => {
     const shouldShowToast = options?.showToast ?? true
     setAssessedIssueLookup({})
@@ -3921,6 +4313,7 @@ function App() {
     setIsAnimatingOut(false)
     setSwipeDirection(null)
     setActiveTab(nextTab)
+    setBulkSelectedKeys(new Set())
   }
 
   const handleDesktopNavTabSelect = (nextTab: TabKey) => {
@@ -5156,6 +5549,18 @@ opens a PR.
             </div>
 
             <div className="top-utility-actions" aria-label="Secondary actions">
+              {activeTab !== 'code' ? (
+                <button
+                  type="button"
+                  className={`jobs-button settings-button ${isBulkMode ? 'is-active' : ''}`.trim()}
+                  onClick={toggleBulkMode}
+                  aria-label={isBulkMode ? 'Switch to card view' : 'Switch to bulk mode'}
+                  aria-pressed={isBulkMode}
+                >
+                  <List size={14} />
+                </button>
+              ) : null}
+
               <button
                 type="button"
                 className={`jobs-button ${runningJobsCount > 0 ? 'has-running-jobs' : ''}`.trim()}
@@ -5248,8 +5653,18 @@ opens a PR.
                   Settings
                 </button>
               </nav>
-              {canTriggerDesktopSwipe ? (
+              {isDesktopLayout && hasActiveGithubFeed && activeTab !== 'code' && !showDesktopMainActivity ? (
                 <div className="desktop-nav-swipe-actions">
+                  <button
+                    type="button"
+                    className={`fab-button secondary desktop-swipe-button bulk-toggle-btn ${isBulkMode ? 'is-active' : ''}`}
+                    onClick={toggleBulkMode}
+                  >
+                    <List size={16} />
+                    <span>{isBulkMode ? 'Card View' : 'Bulk'}</span>
+                  </button>
+                  {!isBulkMode && topCard ? (
+                  <>
                   <button
                     type="button"
                     className="fab-button secondary desktop-swipe-button"
@@ -5359,6 +5774,8 @@ opens a PR.
                         <span>Comment</span>
                       </button>
                     </>
+                  ) : null}
+                  </>
                   ) : null}
                   <button
                     type="button"
@@ -5511,6 +5928,143 @@ opens a PR.
         activeTab === 'code' ? (
           <section className="deck-shell" key="tab-code">
             <div className="deck-frame">{renderReposPanel()}</div>
+          </section>
+        ) : isBulkMode ? (
+          <section className="deck-shell bulk-mode-shell" key={`tab-${activeTab}-bulk`}>
+            <div className="bulk-list-header">
+              <div className="bulk-list-select-controls">
+                <button
+                  type="button"
+                  className="fab-button secondary bulk-select-btn"
+                  onClick={bulkSelectedKeys.size === activeDeck.length && activeDeck.length > 0 ? bulkDeselectAll : bulkSelectAll}
+                  disabled={activeDeck.length === 0}
+                >
+                  {bulkSelectedKeys.size === activeDeck.length && activeDeck.length > 0
+                    ? <><CheckSquare size={14} /> <span>Deselect All</span></>
+                    : <><Square size={14} /> <span>Select All</span></>}
+                </button>
+                <span className="bulk-count-label">
+                  {bulkSelectedKeys.size} of {activeDeck.length} selected
+                </span>
+              </div>
+              <div className="bulk-action-bar">
+                <button
+                  type="button"
+                  className="fab-button secondary bulk-action-btn"
+                  onClick={handleBulkSkip}
+                  disabled={bulkSelectedKeys.size === 0 || isBulkActionRunning}
+                >
+                  <ArrowDown size={14} /> <span>Skip</span>
+                </button>
+                <button
+                  type="button"
+                  className="fab-button danger bulk-action-btn"
+                  onClick={() => { void handleBulkClose() }}
+                  disabled={bulkSelectedKeys.size === 0 || isBulkActionRunning}
+                >
+                  <X size={14} /> <span>Close</span>
+                </button>
+                {activeTab === 'issues' ? (
+                  <button
+                    type="button"
+                    className="fab-button assess-button pr-assess-action bulk-action-btn"
+                    onClick={() => { void handleBulkCreatePr() }}
+                    disabled={bulkSelectedKeys.size === 0 || isBulkActionRunning}
+                  >
+                    <DevinLogo size={14} /> <span>Create PR</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="fab-button primary bulk-action-btn"
+                    onClick={() => { void handleBulkMerge() }}
+                    disabled={bulkSelectedKeys.size === 0 || isBulkActionRunning}
+                  >
+                    <Check size={14} /> <span>Merge</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="fab-button assess-button pr-assess-action bulk-action-btn"
+                  onClick={() => { void handleBulkAssess() }}
+                  disabled={bulkSelectedKeys.size === 0 || isBulkActionRunning}
+                >
+                  {isBulkActionRunning ? <span className="spinner" aria-hidden="true" /> : <DevinLogo size={14} />}
+                  <span>Assess</span>
+                </button>
+              </div>
+            </div>
+            <div className="bulk-list-scroll">
+              {activeDeck.length === 0 ? (
+                <div className="empty-state">
+                  <p>
+                    {activeTab === 'issues'
+                      ? 'No issues left to triage.'
+                      : 'No pull requests left to triage.'}
+                  </p>
+                </div>
+              ) : (
+                activeDeck.map((card) => {
+                  const cardKey = toIssueAssessmentKey(card)
+                  const isSelected = cardKey.length > 0 && bulkSelectedKeys.has(cardKey)
+                  const normalizedRepoPath = normalizeRepoPath(card.repo)
+                  const cardUrl = normalizedRepoPath
+                    ? card.kind === 'issue'
+                      ? `https://github.com/${normalizedRepoPath}/issues/${card.id}`
+                      : `https://github.com/${normalizedRepoPath}/pull/${card.id}`
+                    : 'https://github.com'
+
+                  return (
+                    <div
+                      key={`bulk-${card.kind}-${card.id}-${card.repo}`}
+                      className={`bulk-list-item ${isSelected ? 'is-selected' : ''}`}
+                      onClick={() => { if (cardKey.length > 0) toggleBulkSelect(cardKey) }}
+                      role="checkbox"
+                      aria-checked={isSelected}
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (cardKey.length > 0) toggleBulkSelect(cardKey) } }}
+                    >
+                      <span className="bulk-checkbox" aria-hidden="true">
+                        {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
+                      </span>
+                      <div className="bulk-item-content">
+                        <div className="bulk-item-header">
+                          <a
+                            className="repo-name"
+                            href={cardUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {card.repo}#{card.id}
+                          </a>
+                          <span className="bulk-item-author">{card.author}</span>
+                          <span className="bulk-item-timestamp">{card.timestamp}</span>
+                        </div>
+                        <p className="bulk-item-title">{card.title}</p>
+                        {card.kind === 'issue' ? (
+                          <div className="bulk-item-labels">
+                            {(card as IssueCard).labels.slice(0, 3).map((label) => (
+                              <span key={label} className="label-pill">{label}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bulk-item-pr-stats">
+                            <span className="diff-add">+{(card as PullRequestCard).additions}</span>
+                            <span className="diff-remove">-{(card as PullRequestCard).deletions}</span>
+                            <span
+                              className={`ci-status ${(card as PullRequestCard).checks.every((c) => c.passed) ? 'ok' : 'failed'}`}
+                            >
+                              {(card as PullRequestCard).checks.every((c) => c.passed) ? 'CI passing' : 'CI failing'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </section>
         ) : (
           <section className="deck-shell" key={`tab-${activeTab}`}>
@@ -5781,7 +6335,7 @@ opens a PR.
         )
       ) : null}
 
-        {hasActiveGithubFeed && activeTab !== 'code' && !isDesktopLayout ? (
+        {hasActiveGithubFeed && activeTab !== 'code' && !isDesktopLayout && !isBulkMode ? (
           <section className="fab-section" aria-label="Triage actions">
             {activeTab === 'issues' ? (
               <div className="fab-row issue-actions">
