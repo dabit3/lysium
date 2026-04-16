@@ -4364,11 +4364,6 @@ function App() {
     setIsJobsOpen(false)
   }, [isDesktopLayout])
 
-  useEffect(() => {
-    if (isDesktopWideLayout && showDesktopMainActivity) {
-      setIsDesktopActivityOpen(false)
-    }
-  }, [isDesktopWideLayout, showDesktopMainActivity])
 
   useEffect(() => {
     if (!hasActiveGithubFeed) {
@@ -5627,7 +5622,7 @@ opens a PR.
         ) : null}
 
         <div
-          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopRightRail ? 'desktop-settings-open' : ''} ${showDesktopWideRail ? 'desktop-wide-rail' : ''}`.trim()}
+          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopRightRail ? 'desktop-settings-open' : ''} ${showDesktopRightRail && showDesktopWideRail ? 'desktop-wide-rail' : ''}`.trim()}
         >
           {showDesktopLeftNav ? (
             <aside className="desktop-left-nav" aria-label="Desktop navigation">
