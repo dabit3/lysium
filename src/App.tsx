@@ -1578,9 +1578,9 @@ function App() {
     activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'down')
   const showDesktopLeftNav = isDesktopLayout && hasActiveGithubFeed
   const showDesktopWideRail = showDesktopLeftNav && isDesktopWideLayout
-  const showDesktopRightRail = showDesktopLeftNav && (showDesktopWideRail || isSettingsOpen)
+  const showDesktopActivityRail = showDesktopWideRail && isDesktopActivityOpen && !isSettingsOpen
+  const showDesktopRightRail = showDesktopLeftNav && (showDesktopActivityRail || isSettingsOpen)
   const showDesktopSettingsPanel = showDesktopRightRail && isSettingsOpen
-  const showDesktopActivityRail = showDesktopRightRail && showDesktopWideRail && !isSettingsOpen
   const showDesktopMainActivity = showDesktopLeftNav && !showDesktopWideRail && isDesktopActivityOpen
   const canTriggerDesktopSwipe =
     isDesktopLayout &&
@@ -4365,10 +4365,10 @@ function App() {
   }, [isDesktopLayout])
 
   useEffect(() => {
-    if (isDesktopWideLayout) {
+    if (isDesktopWideLayout && showDesktopMainActivity) {
       setIsDesktopActivityOpen(false)
     }
-  }, [isDesktopWideLayout])
+  }, [isDesktopWideLayout, showDesktopMainActivity])
 
   useEffect(() => {
     if (!hasActiveGithubFeed) {
@@ -5627,7 +5627,7 @@ opens a PR.
         ) : null}
 
         <div
-          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopSettingsPanel ? 'desktop-settings-open' : ''} ${showDesktopWideRail ? 'desktop-wide-rail' : ''}`.trim()}
+          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopRightRail ? 'desktop-settings-open' : ''} ${showDesktopWideRail ? 'desktop-wide-rail' : ''}`.trim()}
         >
           {showDesktopLeftNav ? (
             <aside className="desktop-left-nav" aria-label="Desktop navigation">
@@ -5656,26 +5656,21 @@ opens a PR.
                 >
                   {desktopPullRequestCountLabel}
                 </button>
-                {!isDesktopWideLayout ? (
-                  <button
-                    type="button"
-                    className={`desktop-nav-button ${showDesktopMainActivity ? 'is-active' : ''}`.trim()}
-                    onClick={() => {
-                      setIsDesktopActivityOpen(true)
-                      setIsSettingsOpen(false)
-                    }}
-                  >
-                    Activity
-                    <span className="jobs-count-badge">{runningJobsCount}</span>
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${showDesktopMainActivity || showDesktopActivityRail ? 'is-active' : ''}`.trim()}
+                  onClick={() => {
+                    setIsDesktopActivityOpen((prev) => !prev)
+                    setIsSettingsOpen(false)
+                  }}
+                >
+                  Activity
+                  <span className="jobs-count-badge">{runningJobsCount}</span>
+                </button>
                 <button
                   type="button"
                   className={`desktop-nav-button ${isSettingsOpen ? 'is-active' : ''}`.trim()}
                   onClick={() => {
-                    if (isDesktopWideLayout) {
-                      setIsDesktopActivityOpen(false)
-                    }
                     setIsSettingsOpen((previous) => !previous)
                   }}
                   aria-pressed={isSettingsOpen}
