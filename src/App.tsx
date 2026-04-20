@@ -17,6 +17,7 @@ import {
   List,
   CheckSquare,
   Square,
+  Zap,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -6854,6 +6855,90 @@ opens a PR.
               </motion.div>
             </motion.aside>
           </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {hasDevinSession && hasGithubOauthSession ? (
+          <motion.button
+            key="session-status-bar"
+            type="button"
+            className="session-status-bar"
+            onClick={() => setIsSettingsOpen(true)}
+            aria-label="Open session settings"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+          >
+            <span className="session-status-segment session-status-identity">
+              {githubOauthLogin ? (
+                <img
+                  src={`https://github.com/${githubOauthLogin}.png?size=40`}
+                  alt=""
+                  className="session-status-avatar"
+                  width={18}
+                  height={18}
+                  loading="lazy"
+                />
+              ) : (
+                <Github size={14} aria-hidden="true" />
+              )}
+              <span className="session-status-login">
+                {githubOauthLogin ?? 'github'}
+              </span>
+              <span
+                className={`session-status-dot ${
+                  hasVerifiedDevinConnection
+                    ? 'session-status-dot-connected'
+                    : 'session-status-dot-unverified'
+                }`}
+                aria-label={
+                  hasVerifiedDevinConnection
+                    ? 'Devin connection verified'
+                    : 'Devin connection unverified'
+                }
+              />
+            </span>
+
+            <span className="session-status-sep" aria-hidden="true" />
+
+            <span className="session-status-segment session-status-org">
+              <span className="session-status-label">org</span>
+              <span className="session-status-org-id" title={devinOrgId}>
+                {devinOrgId.length > 10
+                  ? `${devinOrgId.slice(0, 8)}…`
+                  : devinOrgId || '—'}
+              </span>
+            </span>
+
+            <span className="session-status-sep" aria-hidden="true" />
+
+            <span
+              className={`session-status-segment session-status-running ${
+                runningJobsCount > 0 ? 'is-active' : ''
+              }`.trim()}
+            >
+              <Zap size={12} aria-hidden="true" />
+              <span className="session-status-value">{runningJobsCount}</span>
+              <span className="session-status-label">running</span>
+              {runningJobsCount > 0 ? (
+                <span className="badge-dot-pulse" aria-hidden="true" />
+              ) : null}
+            </span>
+
+            <span className="session-status-sep" aria-hidden="true" />
+
+            <span className="session-status-segment">
+              <Check size={12} aria-hidden="true" />
+              <span className="session-status-value">{assessedCount}</span>
+              <span className="session-status-label">assessed</span>
+            </span>
+
+            <span className="session-status-settings" aria-hidden="true">
+              <Settings size={12} />
+            </span>
+          </motion.button>
         ) : null}
       </AnimatePresence>
     </div>
