@@ -17,6 +17,7 @@ import {
   List,
   CheckSquare,
   Square,
+  ChevronDown,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -1389,6 +1390,7 @@ function App() {
   const [jobs, setJobs] = useState<JobEntry[]>(() => loadPersistedJobs())
   const [isJobsOpen, setIsJobsOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isSessionOverviewExpanded, setIsSessionOverviewExpanded] = useState(false)
   const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_LAYOUT_MEDIA_QUERY).matches,
   )
@@ -5361,6 +5363,171 @@ opens a PR.
             </a>
           ) : null}
         </div>
+      ) : null}
+
+      {panelClassName !== 'startup-auth-panel' ? (
+        (() => {
+          const githubDotTone = hasGithubOauthSession ? 'ok' : 'off'
+          const devinDotTone = hasVerifiedDevinConnection
+            ? 'ok'
+            : hasDevinSession
+              ? 'warn'
+              : 'off'
+          const healthKey: 'healthy' | 'degraded' | 'disconnected' =
+            hasGithubOauthSession && hasVerifiedDevinConnection
+              ? 'healthy'
+              : hasGithubOauthSession || hasDevinSession || hasVerifiedDevinConnection
+                ? 'degraded'
+                : 'disconnected'
+          const healthLabel =
+            healthKey === 'healthy'
+              ? 'Healthy'
+              : healthKey === 'degraded'
+                ? 'Degraded'
+                : 'Disconnected'
+          const trimmedOrgId = devinOrgId.trim()
+          const maskedOrgId = !trimmedOrgId
+            ? '—'
+            : trimmedOrgId.length <= 8
+              ? `${trimmedOrgId.slice(0, 2)}••••`
+              : `${trimmedOrgId.slice(0, 4)}••••${trimmedOrgId.slice(-4)}`
+          const trimmedCreateAsUser = devinCreateAsUserId.trim()
+          const trimmedScope = githubSearchScope.trim()
+          const overviewTransition: Transition = prefersReducedMotion
+            ? { duration: 0 }
+            : { duration: 0.22, ease: [0.4, 0, 0.2, 1] }
+
+          return (
+            <div className="session-overview">
+              <button
+                type="button"
+                className={`session-overview-toggle${isSessionOverviewExpanded ? ' is-expanded' : ''}`}
+                aria-expanded={isSessionOverviewExpanded}
+                aria-controls="session-overview-content"
+                onClick={() => setIsSessionOverviewExpanded((value) => !value)}
+              >
+                <span className="session-overview-title">
+                  <Activity size={13} aria-hidden="true" />
+                  <span>Session Overview</span>
+                </span>
+                <span className={`session-health-badge tone-${healthKey}`}>
+                  <span className={`session-dot tone-${healthKey}`} aria-hidden="true" />
+                  {healthLabel}
+                </span>
+                <ChevronDown
+                  size={14}
+                  className="session-overview-chevron"
+                  aria-hidden="true"
+                />
+              </button>
+
+              <AnimatePresence initial={false}>
+                {isSessionOverviewExpanded ? (
+                  <motion.div
+                    key="session-overview-content"
+                    id="session-overview-content"
+                    className="session-overview-content"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={overviewTransition}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <div className="session-overview-grid">
+                      <div className="session-overview-card">
+                        <h4>Connection Status</h4>
+                        <dl>
+                          <div className="session-row">
+                            <dt>
+                              <span className={`session-dot tone-${githubDotTone}`} aria-hidden="true" />
+                              GitHub
+                            </dt>
+                            <dd>{hasGithubOauthSession ? 'Connected' : 'Not connected'}</dd>
+                          </div>
+                          <div className="session-row">
+                            <dt>
+                              <span className={`session-dot tone-${devinDotTone}`} aria-hidden="true" />
+                              Devin
+                            </dt>
+                            <dd>
+                              {hasVerifiedDevinConnection
+                                ? 'Verified'
+                                : hasDevinSession
+                                  ? 'Unverified'
+                                  : 'Missing'}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+
+                      <div className="session-overview-card">
+                        <h4>Session Details</h4>
+                        <dl>
+                          <div className="session-row">
+                            <dt>GitHub user</dt>
+                            <dd>{githubOauthLogin ?? '—'}</dd>
+                          </div>
+                          <div className="session-row">
+                            <dt>Devin org</dt>
+                            <dd className="mono">{maskedOrgId}</dd>
+                          </div>
+                          <div className="session-row">
+                            <dt>Search scope</dt>
+                            <dd>{trimmedScope || '—'}</dd>
+                          </div>
+                          <div className="session-row">
+                            <dt>Create as user</dt>
+                            <dd className="mono">{trimmedCreateAsUser || '—'}</dd>
+                          </div>
+                        </dl>
+                      </div>
+
+                      <div className="session-overview-card">
+                        <h4>Activity Summary</h4>
+                        <dl>
+                          <div className="session-row">
+                            <dt>Running</dt>
+                            <dd>
+                              <span className="session-metric">{runningJobsCount}</span>
+                            </dd>
+                          </div>
+                          <div className="session-row">
+                            <dt>Completed</dt>
+                            <dd>
+                              <span className="session-metric">{completedJobsCount}</span>
+                            </dd>
+                          </div>
+                          <div className="session-row">
+                            <dt>Assessed</dt>
+                            <dd>
+                              <span className="session-metric">{assessedCount}</span>
+                            </dd>
+                          </div>
+                          <div className="session-row">
+                            <dt>Issues in feed</dt>
+                            <dd>
+                              <span className="session-metric">{issues.length}</span>
+                            </dd>
+                          </div>
+                          <div className="session-row">
+                            <dt>PRs in feed</dt>
+                            <dd>
+                              <span className="session-metric">{pullRequests.length}</span>
+                            </dd>
+                          </div>
+                          <div className="session-row">
+                            <dt>Theme</dt>
+                            <dd className="mono">{colorTheme}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
+          )
+        })()
       ) : null}
 
       {panelClassName !== 'startup-auth-panel' ? (
