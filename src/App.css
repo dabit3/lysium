@@ -4099,3 +4099,370 @@
     transform: none;
   }
 }
+
+/* Session avatar indicators + popover */
+.session-avatars {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.session-avatars-desktop {
+  margin-left: auto;
+}
+
+.session-avatars-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 3px 5px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 120ms ease;
+}
+
+.session-avatars-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-subtle);
+}
+
+.session-avatars-trigger.is-open {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-subtle);
+}
+
+.session-avatar {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1.5px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.session-avatar-devin {
+  overflow: visible;
+}
+
+.session-avatar-devin img {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.session-avatar-github.is-connected {
+  border-color: var(--status-success);
+  color: var(--text-primary);
+}
+
+.session-avatar-github.is-disconnected {
+  border-color: rgba(160, 160, 160, 0.45);
+  color: var(--text-dim);
+  opacity: 0.72;
+}
+
+.session-avatar-devin.status-connected {
+  border-color: var(--status-success);
+}
+
+.session-avatar-devin.status-pending {
+  border-color: #d9a441;
+}
+
+.session-avatar-devin.status-disconnected {
+  border-color: rgba(200, 80, 80, 0.7);
+  opacity: 0.82;
+}
+
+.session-avatar-badge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #0086e4;
+  color: #ffffff;
+  font-size: 0.56rem;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  border: 1.5px solid var(--bg-main);
+  box-shadow: 0 0 0 1px rgba(0, 134, 228, 0.35);
+}
+
+.session-avatar-popover {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 240px;
+  padding: 0.75rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  display: grid;
+  gap: 0.65rem;
+  transform-origin: top right;
+}
+
+.session-avatar-popover-desktop {
+  right: auto;
+  left: 0;
+  transform-origin: top left;
+}
+
+.session-popover-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.session-popover-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.session-popover-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.session-popover-status {
+  font-size: 0.64rem;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.session-popover-status.is-connected,
+.session-popover-status.status-connected {
+  color: var(--status-success);
+  border-color: color-mix(in srgb, var(--status-success) 45%, transparent);
+  background: color-mix(in srgb, var(--status-success) 10%, transparent);
+}
+
+.session-popover-status.status-pending {
+  color: #d9a441;
+  border-color: rgba(217, 164, 65, 0.45);
+  background: rgba(217, 164, 65, 0.12);
+}
+
+.session-popover-status.is-disconnected,
+.session-popover-status.status-disconnected {
+  color: var(--text-dim);
+}
+
+.session-popover-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.session-popover-line {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-popover-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  opacity: 0.7;
+}
+
+.session-popover-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.session-popover-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-main) 40%, transparent);
+}
+
+.session-popover-stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.session-popover-stat-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.session-popover-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding-top: 0.15rem;
+}
+
+.session-popover-link {
+  background: transparent;
+  border: 0;
+  padding: 0.25rem 0.35rem;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--accent-primary);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.session-popover-link:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
+.session-popover-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.session-popover-link-danger {
+  color: #e36a6a;
+}
+
+.session-popover-link-danger:hover:not(:disabled) {
+  background: rgba(227, 106, 106, 0.12);
+}
+
+/* Light theme overrides */
+[data-theme="light"] .session-avatars-trigger:hover,
+[data-theme="light"] .session-avatars-trigger.is-open {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .session-avatar {
+  background: #ffffff;
+}
+
+[data-theme="light"] .session-avatar-badge {
+  border-color: #ffffff;
+}
+
+[data-theme="light"] .session-avatar-popover {
+  background: #ffffff;
+}
+
+[data-theme="light"] .session-popover-link-danger {
+  color: #c0392b;
+}
+
+[data-theme="light"] .session-popover-link-danger:hover:not(:disabled) {
+  background: rgba(192, 57, 43, 0.1);
+}
+
+/* Aurora theme overrides */
+[data-theme="aurora"] .session-avatar,
+[data-theme="aurora"] .session-avatar-popover {
+  background: #1b1b1d;
+  border-color: rgba(203, 203, 203, 0.26);
+}
+
+[data-theme="aurora"] .session-avatars-trigger:hover,
+[data-theme="aurora"] .session-avatars-trigger.is-open {
+  background: rgba(255, 255, 230, 0.06);
+  border-color: rgba(255, 255, 230, 0.26);
+}
+
+[data-theme="aurora"] .session-avatar-github.is-connected,
+[data-theme="aurora"] .session-avatar-devin.status-connected {
+  border-color: #ffffe6;
+}
+
+[data-theme="aurora"] .session-avatar-badge {
+  background: #ffffe6;
+  color: #1b1b1d;
+  border-color: #1b1b1d;
+  box-shadow: none;
+}
+
+[data-theme="aurora"] .session-popover-link {
+  color: #ffffe6;
+}
+
+[data-theme="aurora"] .session-popover-link:hover:not(:disabled) {
+  background: rgba(255, 255, 230, 0.1);
+}
+
+/* Matrix theme overrides */
+[data-theme="matrix"] .session-avatar,
+[data-theme="matrix"] .session-avatar-popover {
+  background: #0d1a0d;
+  border-color: rgba(0, 255, 65, 0.22);
+}
+
+[data-theme="matrix"] .session-avatars-trigger:hover,
+[data-theme="matrix"] .session-avatars-trigger.is-open {
+  background: rgba(0, 255, 65, 0.06);
+  border-color: rgba(0, 255, 65, 0.3);
+}
+
+[data-theme="matrix"] .session-avatar-github.is-connected,
+[data-theme="matrix"] .session-avatar-devin.status-connected {
+  border-color: #00ff41;
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.35);
+}
+
+[data-theme="matrix"] .session-avatar-badge {
+  background: #00ff41;
+  color: #0a0a0a;
+  border-color: #0a0a0a;
+  box-shadow: 0 0 0 1px rgba(0, 255, 65, 0.4);
+}
+
+[data-theme="matrix"] .session-popover-link {
+  color: #00ff41;
+}
+
+[data-theme="matrix"] .session-popover-link:hover:not(:disabled) {
+  background: rgba(0, 255, 65, 0.12);
+}

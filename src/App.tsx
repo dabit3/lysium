@@ -1451,6 +1451,9 @@ function App() {
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [bulkSelectedKeys, setBulkSelectedKeys] = useState<Set<string>>(new Set())
   const [isBulkActionRunning, setIsBulkActionRunning] = useState(false)
+  const [isSessionAvatarOpen, setIsSessionAvatarOpen] = useState(false)
+  const sessionAvatarRef = useRef<HTMLDivElement | null>(null)
+  const desktopSessionAvatarRef = useRef<HTMLDivElement | null>(null)
   const pointerIdRef = useRef<number | null>(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const dragOffsetRef = useRef({ x: 0, y: 0 })
@@ -4443,6 +4446,34 @@ function App() {
   }, [hasDevinSession, hasDevinOrgId, hasGithubOauthSession, hasGithubScope])
 
   useEffect(() => {
+    if (!isSessionAvatarOpen) return
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (sessionAvatarRef.current?.contains(target)) return
+      if (desktopSessionAvatarRef.current?.contains(target)) return
+      setIsSessionAvatarOpen(false)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsSessionAvatarOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isSessionAvatarOpen])
+
+  useEffect(() => {
     refreshGithubOauthSessionToken({ silent: true }).finally(() =>
       setIsCheckingGithubOauthSession(false),
     )
@@ -5503,6 +5534,176 @@ opens a PR.
     </section>
   )
 
+  const renderSessionAvatars = (variant: 'mobile' | 'desktop') => {
+    const containerRef = variant === 'desktop' ? desktopSessionAvatarRef : sessionAvatarRef
+    const githubConnected = Boolean(hasGithubOauthSession && githubOauthLogin)
+    const devinConnectionStatus: 'connected' | 'pending' | 'disconnected' =
+      hasVerifiedDevinConnection
+        ? 'connected'
+        : hasDevinSession
+          ? 'pending'
+          : 'disconnected'
+    const feedSize = issues.length + pullRequests.length
+    const scopeLabel = githubSearchScope.trim() || 'No scope set'
+    const trimmedOrgId = devinOrgId.trim()
+    const truncatedOrgId =
+      trimmedOrgId.length > 10
+        ? `${trimmedOrgId.slice(0, 4)}…${trimmedOrgId.slice(-4)}`
+        : trimmedOrgId
+    const devinStatusLabel =
+      devinConnectionStatus === 'connected'
+        ? 'Verified'
+        : devinConnectionStatus === 'pending'
+          ? 'Unverified'
+          : 'No session'
+
+    return (
+      <div
+        ref={containerRef}
+        className={`session-avatars session-avatars-${variant}`}
+      >
+        <button
+          type="button"
+          className={`session-avatars-trigger ${isSessionAvatarOpen ? 'is-open' : ''}`.trim()}
+          onClick={() => setIsSessionAvatarOpen((open) => !open)}
+          aria-expanded={isSessionAvatarOpen}
+          aria-haspopup="dialog"
+          aria-label="Session status"
+        >
+          <span
+            className={`session-avatar session-avatar-github ${githubConnected ? 'is-connected' : 'is-disconnected'}`}
+            title={githubConnected ? `GitHub: ${githubOauthLogin}` : 'GitHub: not connected'}
+          >
+            <Github size={11} aria-hidden="true" />
+          </span>
+          <span
+            className={`session-avatar session-avatar-devin status-${devinConnectionStatus}`}
+            title={`Devin: ${devinStatusLabel}`}
+          >
+            <DevinLogo size={14} />
+            {runningJobsCount > 0 ? (
+              <motion.span
+                key={runningJobsCount}
+                className="session-avatar-badge"
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+                aria-label={`${runningJobsCount} running`}
+              >
+                {runningJobsCount}
+              </motion.span>
+            ) : null}
+          </span>
+        </button>
+
+        <AnimatePresence>
+          {isSessionAvatarOpen ? (
+            <motion.div
+              role="dialog"
+              aria-label="Session details"
+              className={`session-avatar-popover session-avatar-popover-${variant}`}
+              initial={{ opacity: 0, scale: 0.96, y: -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: -4 }}
+              transition={{ duration: 0.16, ease: [0.2, 0.8, 0.2, 1] }}
+            >
+              <div className="session-popover-row">
+                <span
+                  className={`session-avatar session-avatar-github ${githubConnected ? 'is-connected' : 'is-disconnected'}`}
+                  aria-hidden="true"
+                >
+                  <Github size={11} />
+                </span>
+                <div className="session-popover-body">
+                  <div className="session-popover-title">
+                    <span>GitHub</span>
+                    <span
+                      className={`session-popover-status ${githubConnected ? 'is-connected' : 'is-disconnected'}`}
+                    >
+                      {githubConnected ? 'Connected' : 'Not connected'}
+                    </span>
+                  </div>
+                  <div className="session-popover-meta">
+                    <span className="session-popover-line">
+                      {githubConnected ? `as ${githubOauthLogin}` : 'Sign in to browse issues'}
+                    </span>
+                    <span className="session-popover-line">Scope: {scopeLabel}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="session-popover-divider" aria-hidden="true" />
+
+              <div className="session-popover-row">
+                <span
+                  className={`session-avatar session-avatar-devin status-${devinConnectionStatus}`}
+                  aria-hidden="true"
+                >
+                  <DevinLogo size={14} />
+                </span>
+                <div className="session-popover-body">
+                  <div className="session-popover-title">
+                    <span>Devin</span>
+                    <span className={`session-popover-status status-${devinConnectionStatus}`}>
+                      {devinStatusLabel}
+                    </span>
+                  </div>
+                  <div className="session-popover-meta">
+                    <span className="session-popover-line">
+                      Org: {truncatedOrgId || '—'}
+                    </span>
+                    <span className="session-popover-line">
+                      {runningJobsCount} running · {completedJobsCount} completed
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="session-popover-divider" aria-hidden="true" />
+
+              <div className="session-popover-stats">
+                <div className="session-popover-stat">
+                  <span className="session-popover-stat-value">{assessedCount}</span>
+                  <span className="session-popover-stat-label">Assessed</span>
+                </div>
+                <div className="session-popover-stat">
+                  <span className="session-popover-stat-value">{feedSize}</span>
+                  <span className="session-popover-stat-label">Feed</span>
+                </div>
+              </div>
+
+              <div className="session-popover-footer">
+                <button
+                  type="button"
+                  className="session-popover-link"
+                  onClick={() => {
+                    setIsSessionAvatarOpen(false)
+                    setIsSettingsOpen(true)
+                  }}
+                >
+                  Settings
+                </button>
+                {GITHUB_OAUTH_DISCONNECT_URL && hasGithubOauthSession ? (
+                  <button
+                    type="button"
+                    className="session-popover-link session-popover-link-danger"
+                    onClick={() => {
+                      setIsSessionAvatarOpen(false)
+                      void handleDisconnectGithubOauth()
+                    }}
+                    disabled={isDisconnectingGithubOauthSession}
+                  >
+                    Disconnect
+                  </button>
+                ) : null}
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+    )
+  }
+
   return (
     <div className="minion-app">
       {toastMessage ? (
@@ -5579,6 +5780,7 @@ opens a PR.
             </div>
 
             <div className="top-utility-actions" aria-label="Secondary actions">
+              {renderSessionAvatars('mobile')}
               {activeTab !== 'code' ? (
                 <button
                   type="button"
@@ -5633,6 +5835,7 @@ opens a PR.
             <aside className="desktop-left-nav" aria-label="Desktop navigation">
               <div className="desktop-left-nav-header">
                 <span className="settings-app-name">LYSIUM</span>
+                {renderSessionAvatars('desktop')}
               </div>
               <nav className="desktop-left-nav-list" aria-label="Primary navigation">
                 <button
