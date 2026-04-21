@@ -1443,6 +1443,7 @@ function App() {
   const [sessionDetailError, setSessionDetailError] = useState<string | null>(null)
   const [sessionLookupInput, setSessionLookupInput] = useState('')
   const [sessionLookupError, setSessionLookupError] = useState<string | null>(null)
+  const sessionDetailRequestIdRef = useRef(0)
   const [createIssueRepo, setCreateIssueRepo] = useState('')
   const [createIssueRepoQuery, setCreateIssueRepoQuery] = useState('')
   const [createIssueTitle, setCreateIssueTitle] = useState('')
@@ -2493,18 +2494,23 @@ function App() {
   }
 
   const loadSessionDetail = async (sessionId: string) => {
+    const requestId = ++sessionDetailRequestIdRef.current
     setSessionDetailLoading(true)
     setSessionDetailError(null)
     try {
       const data = await fetchDevinSessionById(sessionId)
+      if (requestId !== sessionDetailRequestIdRef.current) return
       setSessionDetailData(data)
     } catch (error) {
+      if (requestId !== sessionDetailRequestIdRef.current) return
       const message =
         error instanceof Error ? error.message : 'Unable to load session.'
       setSessionDetailError(message)
       setSessionDetailData(null)
     } finally {
-      setSessionDetailLoading(false)
+      if (requestId === sessionDetailRequestIdRef.current) {
+        setSessionDetailLoading(false)
+      }
     }
   }
 
@@ -2523,8 +2529,10 @@ function App() {
   }
 
   const handleCloseSessionDetail = () => {
+    sessionDetailRequestIdRef.current += 1
     setIsSessionDetailOpen(false)
     setSessionDetailError(null)
+    setSessionDetailLoading(false)
   }
 
   const handleRefreshSessionDetail = () => {
