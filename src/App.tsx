@@ -1401,7 +1401,7 @@ function App() {
     const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora' | 'matrix'>(
       () =>
         (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora' | 'matrix') ??
-        'dark',
+        'light',
     )
   const [devinApiKey, setDevinApiKey] = useState(DEFAULT_DEVIN_API_KEY)
   const [devinOrgId, setDevinOrgId] = useState(DEFAULT_DEVIN_ORG_ID)
