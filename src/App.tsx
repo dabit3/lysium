@@ -402,11 +402,11 @@ const normalizeDevinSessionInput = (input: string): string | undefined => {
     return undefined
   }
 
-  if (/^devin-[a-zA-Z0-9]+$/.test(candidate)) {
+  if (/^devin-[a-zA-Z0-9_-]+$/.test(candidate)) {
     return candidate
   }
 
-  if (/^[a-zA-Z0-9]+$/.test(candidate)) {
+  if (/^[a-zA-Z0-9_-]+$/.test(candidate)) {
     return `devin-${candidate}`
   }
 
