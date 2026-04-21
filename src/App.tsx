@@ -83,12 +83,31 @@ interface PullRequestCodeEntry {
   lines: string[]
 }
 
+interface DevinSessionPullRequest {
+  pr_url?: string
+  pr_state?: string | null
+}
+
 interface DevinSessionPayload {
   session_id?: string
   url?: string
   status?: string
   status_detail?: string | null
   structured_output?: unknown
+  title?: string | null
+  org_id?: string
+  user_id?: string | null
+  service_user_id?: string | null
+  parent_session_id?: string | null
+  child_session_ids?: string[] | null
+  playbook_id?: string | null
+  created_at?: number
+  updated_at?: number
+  acus_consumed?: number
+  tags?: string[]
+  is_archived?: boolean
+  is_advanced?: boolean
+  pull_requests?: DevinSessionPullRequest[]
   [key: string]: unknown
 }
 
@@ -367,6 +386,42 @@ const toSessionIdFromSessionUrl = (sessionUrl: string | undefined) => {
 
   const parsed = decodeURIComponent(match[1]).trim()
   return parsed.length > 0 ? parsed : undefined
+}
+
+// Normalizes arbitrary user input (session URL, "devin-abc", or bare "abc")
+// into a canonical Devin session ID prefixed with "devin-".
+const normalizeDevinSessionInput = (input: string): string | undefined => {
+  const trimmed = input.trim()
+  if (!trimmed) {
+    return undefined
+  }
+
+  const fromUrl = toSessionIdFromSessionUrl(trimmed)
+  const candidate = (fromUrl ?? trimmed).replace(/^\/+|\/+$/g, '').trim()
+  if (!candidate) {
+    return undefined
+  }
+
+  if (/^devin-[a-zA-Z0-9]+$/.test(candidate)) {
+    return candidate
+  }
+
+  if (/^[a-zA-Z0-9]+$/.test(candidate)) {
+    return `devin-${candidate}`
+  }
+
+  return undefined
+}
+
+const formatDevinTimestamp = (seconds: number | undefined) => {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
+    return null
+  }
+  try {
+    return new Date(seconds * 1000).toLocaleString()
+  } catch {
+    return null
+  }
 }
 
 const formatSessionReference = (session: DevinSessionPayload) => {
@@ -1381,6 +1436,13 @@ function App() {
   const [commentBody, setCommentBody] = useState('')
   const [isPostingComment, setIsPostingComment] = useState(false)
   const [isCreateIssueModalOpen, setIsCreateIssueModalOpen] = useState(false)
+  const [isSessionDetailOpen, setIsSessionDetailOpen] = useState(false)
+  const [sessionDetailId, setSessionDetailId] = useState<string | null>(null)
+  const [sessionDetailData, setSessionDetailData] = useState<DevinSessionPayload | null>(null)
+  const [sessionDetailLoading, setSessionDetailLoading] = useState(false)
+  const [sessionDetailError, setSessionDetailError] = useState<string | null>(null)
+  const [sessionLookupInput, setSessionLookupInput] = useState('')
+  const [sessionLookupError, setSessionLookupError] = useState<string | null>(null)
   const [createIssueRepo, setCreateIssueRepo] = useState('')
   const [createIssueRepoQuery, setCreateIssueRepoQuery] = useState('')
   const [createIssueTitle, setCreateIssueTitle] = useState('')
@@ -2428,6 +2490,57 @@ function App() {
     }
 
     throw new Error(lastErrorMessage)
+  }
+
+  const loadSessionDetail = async (sessionId: string) => {
+    setSessionDetailLoading(true)
+    setSessionDetailError(null)
+    try {
+      const data = await fetchDevinSessionById(sessionId)
+      setSessionDetailData(data)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to load session.'
+      setSessionDetailError(message)
+      setSessionDetailData(null)
+    } finally {
+      setSessionDetailLoading(false)
+    }
+  }
+
+  const handleOpenSessionDetail = (rawId: string) => {
+    const normalized = normalizeDevinSessionInput(rawId)
+    if (!normalized) {
+      showToast('Invalid session ID.')
+      return
+    }
+    setIsJobsOpen(false)
+    setSessionDetailId(normalized)
+    setSessionDetailData(null)
+    setSessionDetailError(null)
+    setIsSessionDetailOpen(true)
+    void loadSessionDetail(normalized)
+  }
+
+  const handleCloseSessionDetail = () => {
+    setIsSessionDetailOpen(false)
+    setSessionDetailError(null)
+  }
+
+  const handleRefreshSessionDetail = () => {
+    if (!sessionDetailId) return
+    void loadSessionDetail(sessionDetailId)
+  }
+
+  const handleSubmitSessionLookup = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const normalized = normalizeDevinSessionInput(sessionLookupInput)
+    if (!normalized) {
+      setSessionLookupError('Enter a session URL or ID (e.g. devin-abc123).')
+      return
+    }
+    setSessionLookupError(null)
+    handleOpenSessionDetail(normalized)
   }
 
   const pollDevinSessionForPrUrl = async (
@@ -5406,6 +5519,39 @@ opens a PR.
           <span>{jobs.length}</span>
         </div>
 
+        <form
+          className="session-lookup-form"
+          onSubmit={handleSubmitSessionLookup}
+          aria-label="Look up a Devin session by ID or URL"
+        >
+          <input
+            type="text"
+            className="session-lookup-input"
+            value={sessionLookupInput}
+            onChange={(event) => {
+              setSessionLookupInput(event.target.value)
+              if (sessionLookupError) {
+                setSessionLookupError(null)
+              }
+            }}
+            placeholder="View session by ID or URL (devin-…)"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            aria-label="Devin session ID or URL"
+          />
+          <button
+            type="submit"
+            className="fab-button primary session-lookup-button"
+            disabled={sessionLookupInput.trim().length === 0}
+          >
+            View
+          </button>
+        </form>
+        {sessionLookupError ? (
+          <p className="session-lookup-error" role="alert">{sessionLookupError}</p>
+        ) : null}
+
         {jobs.length === 0 ? (
           <p className="jobs-empty">No sessions yet.</p>
         ) : (
@@ -5449,6 +5595,19 @@ opens a PR.
                         View PR
                       </a>
                     ) : null}
+
+                    {(() => {
+                      const jobSessionId = toSessionIdFromSessionUrl(job.sessionUrl)
+                      return jobSessionId ? (
+                        <button
+                          type="button"
+                          className="job-session-link job-view-session-button"
+                          onClick={() => handleOpenSessionDetail(jobSessionId)}
+                        >
+                          View
+                        </button>
+                      ) : null
+                    })()}
 
                     {job.sessionUrl ? (
                       <a
@@ -6853,6 +7012,235 @@ opens a PR.
                 {renderActivityPanelViewContent({ closeOnLinkClick: true })}
               </motion.div>
             </motion.aside>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isSessionDetailOpen ? (
+          <motion.div
+            key="session-detail-backdrop"
+            className="modal-backdrop"
+            onClick={handleCloseSessionDetail}
+            role="presentation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={drawerBackdropTransition}
+          >
+            <motion.div
+              className="comment-modal session-detail-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Devin session details"
+              onClick={(event) => event.stopPropagation()}
+              initial={commentModalInitial}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ ...commentModalExit, transition: commentModalExitTransition }}
+              transition={commentModalTransition}
+            >
+              <div className="session-detail-header">
+                <div className="session-detail-header-main">
+                  <h3>Session</h3>
+                  <p className="modal-caption session-detail-id">
+                    {sessionDetailId ?? ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="fab-button secondary session-detail-refresh"
+                  onClick={handleRefreshSessionDetail}
+                  disabled={sessionDetailLoading || !sessionDetailId}
+                  aria-label="Refresh session"
+                >
+                  {sessionDetailLoading ? (
+                    <span className="spinner" aria-hidden="true" />
+                  ) : (
+                    <RefreshCw size={14} aria-hidden="true" />
+                  )}
+                  <span>{sessionDetailLoading ? 'Loading' : 'Refresh'}</span>
+                </button>
+              </div>
+
+              {sessionDetailError ? (
+                <p className="session-detail-error" role="alert">
+                  {sessionDetailError}
+                </p>
+              ) : null}
+
+              {sessionDetailLoading && !sessionDetailData ? (
+                <p className="session-detail-loading">Loading session…</p>
+              ) : null}
+
+              {sessionDetailData ? (
+                <div className="session-detail-body">
+                  {typeof sessionDetailData.title === 'string' &&
+                  sessionDetailData.title.trim().length > 0 ? (
+                    <p className="session-detail-title">{sessionDetailData.title}</p>
+                  ) : null}
+
+                  <div className="session-detail-badges">
+                    {typeof sessionDetailData.status === 'string' ? (
+                      <span
+                        className={`job-devin-badge ${devinStatusToBadgeClass(sessionDetailData.status)}`}
+                      >
+                        {sessionDetailData.status === 'running' ? (
+                          <span className="badge-dot-pulse" aria-hidden="true" />
+                        ) : null}
+                        {formatDevinStatusLabel(sessionDetailData.status)}
+                      </span>
+                    ) : null}
+                    {typeof sessionDetailData.status_detail === 'string' &&
+                    sessionDetailData.status_detail.trim().length > 0 ? (
+                      <span className="session-detail-status-detail">
+                        {sessionDetailData.status_detail}
+                      </span>
+                    ) : null}
+                    {sessionDetailData.is_archived ? (
+                      <span className="session-detail-flag">Archived</span>
+                    ) : null}
+                    {sessionDetailData.is_advanced ? (
+                      <span className="session-detail-flag">Advanced</span>
+                    ) : null}
+                  </div>
+
+                  <dl className="session-detail-fields">
+                    {formatDevinTimestamp(sessionDetailData.created_at) ? (
+                      <div className="session-detail-field">
+                        <dt>Created</dt>
+                        <dd>{formatDevinTimestamp(sessionDetailData.created_at)}</dd>
+                      </div>
+                    ) : null}
+                    {formatDevinTimestamp(sessionDetailData.updated_at) ? (
+                      <div className="session-detail-field">
+                        <dt>Updated</dt>
+                        <dd>{formatDevinTimestamp(sessionDetailData.updated_at)}</dd>
+                      </div>
+                    ) : null}
+                    {typeof sessionDetailData.acus_consumed === 'number' ? (
+                      <div className="session-detail-field">
+                        <dt>ACUs consumed</dt>
+                        <dd>{sessionDetailData.acus_consumed}</dd>
+                      </div>
+                    ) : null}
+                    {typeof sessionDetailData.parent_session_id === 'string' &&
+                    sessionDetailData.parent_session_id.length > 0 ? (
+                      <div className="session-detail-field">
+                        <dt>Parent</dt>
+                        <dd>
+                          <button
+                            type="button"
+                            className="session-detail-inline-link"
+                            onClick={() =>
+                              handleOpenSessionDetail(sessionDetailData.parent_session_id as string)
+                            }
+                          >
+                            {sessionDetailData.parent_session_id}
+                          </button>
+                        </dd>
+                      </div>
+                    ) : null}
+                    {Array.isArray(sessionDetailData.child_session_ids) &&
+                    sessionDetailData.child_session_ids.length > 0 ? (
+                      <div className="session-detail-field">
+                        <dt>Children</dt>
+                        <dd className="session-detail-children">
+                          {sessionDetailData.child_session_ids.map((childId) => (
+                            <button
+                              type="button"
+                              key={childId}
+                              className="session-detail-inline-link"
+                              onClick={() => handleOpenSessionDetail(childId)}
+                            >
+                              {childId}
+                            </button>
+                          ))}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {typeof sessionDetailData.playbook_id === 'string' &&
+                    sessionDetailData.playbook_id.length > 0 ? (
+                      <div className="session-detail-field">
+                        <dt>Playbook</dt>
+                        <dd>{sessionDetailData.playbook_id}</dd>
+                      </div>
+                    ) : null}
+                    {Array.isArray(sessionDetailData.tags) &&
+                    sessionDetailData.tags.length > 0 ? (
+                      <div className="session-detail-field">
+                        <dt>Tags</dt>
+                        <dd className="session-detail-tags">
+                          {sessionDetailData.tags.map((tag) => (
+                            <span className="session-detail-tag" key={tag}>
+                              {tag}
+                            </span>
+                          ))}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+
+                  {Array.isArray(sessionDetailData.pull_requests) &&
+                  sessionDetailData.pull_requests.length > 0 ? (
+                    <div className="session-detail-prs">
+                      <h4>Pull requests</h4>
+                      <ul>
+                        {sessionDetailData.pull_requests.map((pr) =>
+                          pr && typeof pr.pr_url === 'string' && pr.pr_url.length > 0 ? (
+                            <li key={pr.pr_url}>
+                              <a
+                                href={pr.pr_url}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="session-detail-inline-link"
+                              >
+                                {pr.pr_url}
+                              </a>
+                              {typeof pr.pr_state === 'string' && pr.pr_state.length > 0 ? (
+                                <span className="session-detail-pr-state">{pr.pr_state}</span>
+                              ) : null}
+                            </li>
+                          ) : null,
+                        )}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {sessionDetailData.structured_output &&
+                  typeof sessionDetailData.structured_output === 'object' ? (
+                    <div className="session-detail-structured">
+                      <h4>Structured output</h4>
+                      <pre>
+                        {JSON.stringify(sessionDetailData.structured_output, null, 2)}
+                      </pre>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="modal-actions session-detail-actions">
+                {typeof sessionDetailData?.url === 'string' &&
+                sessionDetailData.url.length > 0 ? (
+                  <a
+                    href={sessionDetailData.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="fab-button secondary session-detail-open-external"
+                  >
+                    Open in Devin
+                  </a>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  className="fab-button primary"
+                  onClick={handleCloseSessionDetail}
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         ) : null}
       </AnimatePresence>
