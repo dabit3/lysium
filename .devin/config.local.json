@@ -12,7 +12,8 @@
       "Exec(curl)",
       "Exec(npx tsc)",
       "Exec(sed)",
-      "Exec(cat)"
+      "Exec(cat)",
+      "Exec(/Users/naderdabit/.local/bin/devin-insiders)"
     ]
   }
 }
