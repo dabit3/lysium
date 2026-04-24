@@ -1399,9 +1399,10 @@ function App() {
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
     const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
-      () =>
-        (localStorage.getItem('minion.theme') as 'dark' | 'light' | 'aurora') ??
-        'dark',
+      () => {
+        const stored = localStorage.getItem('minion.theme')
+        return stored === 'dark' || stored === 'light' || stored === 'aurora' ? stored : 'dark'
+      },
     )
   const [devinApiKey, setDevinApiKey] = useState(DEFAULT_DEVIN_API_KEY)
   const [devinOrgId, setDevinOrgId] = useState(DEFAULT_DEVIN_ORG_ID)
