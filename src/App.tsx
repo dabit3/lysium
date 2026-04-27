@@ -19,12 +19,24 @@ import {
   Square,
   PanelRightClose,
   PanelRightOpen,
+  ChevronDown,
+  ChevronUp,
+  ArrowLeft,
+  ExternalLink,
+  Clock,
+  Tag,
+  GitPullRequest,
+  Copy,
+  Archive,
+  ArchiveRestore,
+  RotateCcw,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
 
 type TabKey = 'issues' | 'pullRequests' | 'code'
 type SwipeDirection = 'left' | 'right' | 'down'
+type SessionDetailMode = 'inline' | 'drawer' | 'modal' | 'detail-view'
 
 interface BaseCard {
   id: number
@@ -1405,6 +1417,12 @@ function App() {
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
   const [isDesktopActivityMinimized, setIsDesktopActivityMinimized] = useState(false)
   const [isArchivedSessionsOpen, setIsArchivedSessionsOpen] = useState(false)
+  const [sessionDetailMode, setSessionDetailMode] = useState<SessionDetailMode>('inline')
+  const [expandedJobId, setExpandedJobId] = useState<number | null>(null)
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+  const [isSessionDrawerOpen, setIsSessionDrawerOpen] = useState(false)
+  const [isSessionModalOpen, setIsSessionModalOpen] = useState(false)
+  const [isSessionDetailViewOpen, setIsSessionDetailViewOpen] = useState(false)
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
     const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
@@ -1701,6 +1719,52 @@ function App() {
       ),
     )
     showToast('Session restored.')
+  }
+
+  const openSessionDetail = (job: JobEntry) => {
+    setSelectedJobId(job.id)
+    switch (sessionDetailMode) {
+      case 'inline':
+        setExpandedJobId((prev) => (prev === job.id ? null : job.id))
+        break
+      case 'drawer':
+        setIsSessionDrawerOpen(true)
+        break
+      case 'modal':
+        setIsSessionModalOpen(true)
+        break
+      case 'detail-view':
+        setIsSessionDetailViewOpen(true)
+        break
+    }
+  }
+
+  const closeSessionDetail = () => {
+    setSelectedJobId(null)
+    setExpandedJobId(null)
+    setIsSessionDrawerOpen(false)
+    setIsSessionModalOpen(false)
+    setIsSessionDetailViewOpen(false)
+  }
+
+  const selectedJob = useMemo(
+    () => (selectedJobId !== null ? jobs.find((j) => j.id === selectedJobId) ?? null : null),
+    [jobs, selectedJobId],
+  )
+
+  const formatAbsoluteTime = (timestamp: number) => {
+    const date = new Date(timestamp)
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const copyToClipboard = (text: string) => {
+    void navigator.clipboard.writeText(text)
+    showToast('Copied to clipboard.')
   }
 
   const updateDragOffset = (nextOffset: { x: number; y: number }) => {
@@ -5443,6 +5507,258 @@ opens a PR.
     </section>
   )
 
+  const renderSessionDetailContent = (job: JobEntry) => {
+    const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
+    const isArchived = isJobArchived(job)
+
+    return (
+      <div className="session-detail-body">
+        <div className="session-detail-field">
+          <span className="session-detail-label">
+            <Tag size={12} /> Type
+          </span>
+          <span className="session-detail-value">{job.label}</span>
+        </div>
+
+        <div className="session-detail-field">
+          <span className="session-detail-label">
+            <Activity size={12} /> Status
+          </span>
+          <span className="session-detail-value">
+            <span className={`job-status ${job.status}`}>{job.status}</span>
+            {job.devinStatus ? (
+              <span className={`job-devin-badge ${devinStatusToBadgeClass(job.devinStatus)}`}>
+                {job.devinStatus === 'running' ? (
+                  <span className="badge-dot-pulse" aria-hidden="true" />
+                ) : null}
+                {formatDevinStatusLabel(job.devinStatus)}
+              </span>
+            ) : null}
+          </span>
+        </div>
+
+        {job.statusDetail ? (
+          <div className="session-detail-field">
+            <span className="session-detail-label">Detail</span>
+            <span className="session-detail-value session-detail-status-detail">{job.statusDetail}</span>
+          </div>
+        ) : null}
+
+        <div className="session-detail-field">
+          <span className="session-detail-label">
+            <Github size={12} /> Target
+          </span>
+          <span className="session-detail-value">{job.target}</span>
+        </div>
+
+        <div className="session-detail-field">
+          <span className="session-detail-label">Prompt</span>
+          <span className="session-detail-value session-detail-message">{job.message}</span>
+        </div>
+
+        <div className="session-detail-field">
+          <span className="session-detail-label">
+            <Clock size={12} /> Created
+          </span>
+          <span className="session-detail-value">
+            {formatAbsoluteTime(job.createdAt)}
+            <span className="session-detail-relative-time">({formatRelativeTime(job.createdAt)})</span>
+          </span>
+        </div>
+
+        {sessionId ? (
+          <div className="session-detail-field">
+            <span className="session-detail-label">Session ID</span>
+            <span className="session-detail-value session-detail-id-row">
+              <code className="session-detail-id">{sessionId}</code>
+              <button
+                type="button"
+                className="session-detail-copy-button"
+                onClick={() => copyToClipboard(sessionId)}
+                aria-label="Copy session ID"
+              >
+                <Copy size={12} />
+              </button>
+            </span>
+          </div>
+        ) : null}
+
+        {isArchived && job.archivedAt ? (
+          <div className="session-detail-field">
+            <span className="session-detail-label">
+              <Archive size={12} /> Archived
+            </span>
+            <span className="session-detail-value">{formatAbsoluteTime(job.archivedAt)}</span>
+          </div>
+        ) : null}
+
+        <div className="session-detail-actions">
+          {job.pullRequestUrl ? (
+            <a
+              href={job.pullRequestUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="session-detail-action-button"
+            >
+              <GitPullRequest size={13} /> View PR
+            </a>
+          ) : null}
+
+          {job.sessionUrl ? (
+            <a
+              href={job.sessionUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="session-detail-action-button"
+            >
+              <ExternalLink size={13} />
+              {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
+            </a>
+          ) : null}
+
+          <button
+            type="button"
+            className="session-detail-action-button"
+            onClick={() => {
+              if (isArchived) {
+                handleRestoreArchivedJob(job.id)
+              } else {
+                handleArchiveJob(job.id)
+              }
+            }}
+          >
+            {isArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+            {isArchived ? 'Restore' : 'Archive'}
+          </button>
+
+          {!isArchived && job.status === 'failed' && job.retryable ? (
+            <button
+              type="button"
+              className="session-detail-action-button session-detail-retry"
+              onClick={() => { void handleRetryJob(job.id) }}
+            >
+              <RotateCcw size={13} /> Retry
+            </button>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
+  const renderSessionDetailModePicker = () => (
+    <div className="session-detail-mode-picker">
+      <span className="session-detail-mode-label">Detail view:</span>
+      {(['inline', 'drawer', 'modal', 'detail-view'] as SessionDetailMode[]).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          className={`session-detail-mode-option ${sessionDetailMode === mode ? 'is-active' : ''}`.trim()}
+          onClick={() => {
+            closeSessionDetail()
+            setSessionDetailMode(mode)
+          }}
+        >
+          {mode === 'inline' ? 'Inline' : mode === 'drawer' ? 'Drawer' : mode === 'modal' ? 'Modal' : 'Detail'}
+        </button>
+      ))}
+    </div>
+  )
+
+  const renderSessionDrawer = () => {
+    if (!isSessionDrawerOpen || !selectedJob) return null
+
+    return (
+      <div className="session-drawer-overlay" onClick={closeSessionDetail}>
+        <motion.aside
+          className="session-drawer"
+          initial={{ x: '100%' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100%' }}
+          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Session details drawer"
+        >
+          <div className="session-drawer-header">
+            <h4>{selectedJob.label}</h4>
+            <button
+              type="button"
+              className="activity-panel-icon-button"
+              onClick={closeSessionDetail}
+              aria-label="Close drawer"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <div className="session-drawer-body">
+            {renderSessionDetailContent(selectedJob)}
+          </div>
+        </motion.aside>
+      </div>
+    )
+  }
+
+  const renderSessionModal = () => {
+    if (!isSessionModalOpen || !selectedJob) return null
+
+    return (
+      <div className="session-modal-overlay" onClick={closeSessionDetail}>
+        <motion.div
+          className="session-modal"
+          initial={{ opacity: 0, scale: 0.95, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 12 }}
+          transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label="Session details"
+          aria-modal="true"
+        >
+          <div className="session-modal-header">
+            <h4>{selectedJob.label}</h4>
+            <button
+              type="button"
+              className="activity-panel-icon-button"
+              onClick={closeSessionDetail}
+              aria-label="Close modal"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <div className="session-modal-body">
+            {renderSessionDetailContent(selectedJob)}
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
+  const renderSessionDetailView = () => {
+    if (!isSessionDetailViewOpen || !selectedJob) return null
+
+    return (
+      <div className="session-detail-view">
+        <div className="session-detail-view-header">
+          <button
+            type="button"
+            className="session-detail-back-button"
+            onClick={closeSessionDetail}
+            aria-label="Back to sessions"
+          >
+            <ArrowLeft size={15} />
+            <span>Sessions</span>
+          </button>
+        </div>
+        <div className="session-detail-view-title">
+          <h4>{selectedJob.label}</h4>
+          <span className={`job-status ${selectedJob.status}`}>{selectedJob.status}</span>
+        </div>
+        <div className="session-detail-view-body">
+          {renderSessionDetailContent(selectedJob)}
+        </div>
+      </div>
+    )
+  }
+
   const renderJobsSectionContent = (options?: { closeOnLinkClick?: boolean }) => {
     const linkClickHandler = options?.closeOnLinkClick ? () => setIsJobsOpen(false) : undefined
     const renderJobList = (
@@ -5452,93 +5768,144 @@ opens a PR.
       <ul className="jobs-list">
         {jobEntries.map((job) => {
           const isArchived = listOptions?.archived === true
+          const isExpanded = sessionDetailMode === 'inline' && expandedJobId === job.id
 
           return (
-            <li key={job.id} className={`job-item status-${job.status}`}>
-              <div className="job-row">
-                <p className="job-label">{job.label}</p>
-                <span className={`job-status ${job.status}`}>{job.status}</span>
+            <li
+              key={job.id}
+              className={`job-item status-${job.status} ${isExpanded ? 'job-item-expanded' : ''} job-item-clickable`.trim()}
+            >
+              <div
+                className="job-item-click-target"
+                onClick={() => openSessionDetail(job)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    openSessionDetail(job)
+                  }
+                }}
+                aria-expanded={sessionDetailMode === 'inline' ? isExpanded : undefined}
+              >
+                <div className="job-row">
+                  <p className="job-label">{job.label}</p>
+                  <div className="job-row-right">
+                    <span className={`job-status ${job.status}`}>{job.status}</span>
+                    {sessionDetailMode === 'inline' ? (
+                      isExpanded ? <ChevronUp size={14} className="job-expand-icon" /> : <ChevronDown size={14} className="job-expand-icon" />
+                    ) : (
+                      <ExternalLink size={12} className="job-expand-icon" />
+                    )}
+                  </div>
+                </div>
+
+                {job.devinStatus ? (
+                  <div className="job-devin-status-row">
+                    <span className={`job-devin-badge ${devinStatusToBadgeClass(job.devinStatus)}`}>
+                      {job.devinStatus === 'running' ? (
+                        <span className="badge-dot-pulse" aria-hidden="true" />
+                      ) : null}
+                      {formatDevinStatusLabel(job.devinStatus)}
+                    </span>
+                    {job.statusDetail ? (
+                      <span className="job-status-detail">{job.statusDetail}</span>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <p className="job-target">{job.target}</p>
               </div>
 
-              {job.devinStatus ? (
-                <div className="job-devin-status-row">
-                  <span className={`job-devin-badge ${devinStatusToBadgeClass(job.devinStatus)}`}>
-                    {job.devinStatus === 'running' ? (
-                      <span className="badge-dot-pulse" aria-hidden="true" />
+              {!isExpanded ? (
+                <div className="job-meta-row">
+                  <span className="job-time">{formatRelativeTime(job.createdAt)}</span>
+
+                  <div className="job-meta-actions">
+                    {job.pullRequestUrl ? (
+                      <a
+                        href={job.pullRequestUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="job-session-link job-pr-link"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          linkClickHandler?.()
+                        }}
+                      >
+                        View PR
+                      </a>
                     ) : null}
-                    {formatDevinStatusLabel(job.devinStatus)}
-                  </span>
-                  {job.statusDetail ? (
-                    <span className="job-status-detail">{job.statusDetail}</span>
-                  ) : null}
+
+                    {job.sessionUrl ? (
+                      <a
+                        href={job.sessionUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="job-session-link"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          linkClickHandler?.()
+                        }}
+                      >
+                        {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
+                      </a>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      className="job-session-link job-archive-button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (isArchived) {
+                          handleRestoreArchivedJob(job.id)
+                          return
+                        }
+                        handleArchiveJob(job.id)
+                      }}
+                      aria-label={`${isArchived ? 'Restore' : 'Archive'} ${job.label} session`}
+                    >
+                      {isArchived ? 'Restore' : 'Archive'}
+                    </button>
+
+                    {!isArchived && job.status === 'failed' && job.retryable ? (
+                      <button
+                        type="button"
+                        className="fab-button secondary job-retry"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void handleRetryJob(job.id)
+                        }}
+                      >
+                        Retry
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
 
-              <p className="job-target">{job.target}</p>
-              <p className="job-message">{job.message}</p>
-
-              <div className="job-meta-row">
-                <span className="job-time">{formatRelativeTime(job.createdAt)}</span>
-
-                <div className="job-meta-actions">
-                  {job.pullRequestUrl ? (
-                    <a
-                      href={job.pullRequestUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="job-session-link job-pr-link"
-                      onClick={linkClickHandler}
-                    >
-                      View PR
-                    </a>
-                  ) : null}
-
-                  {job.sessionUrl ? (
-                    <a
-                      href={job.sessionUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="job-session-link"
-                      onClick={linkClickHandler}
-                    >
-                      {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
-                    </a>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    className="job-session-link job-archive-button"
-                    onClick={() => {
-                      if (isArchived) {
-                        handleRestoreArchivedJob(job.id)
-                        return
-                      }
-
-                      handleArchiveJob(job.id)
-                    }}
-                    aria-label={`${isArchived ? 'Restore' : 'Archive'} ${job.label} session`}
+              <AnimatePresence>
+                {isExpanded ? (
+                  <motion.div
+                    className="job-inline-detail"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: 'easeInOut' }}
                   >
-                    {isArchived ? 'Restore' : 'Archive'}
-                  </button>
-
-                  {!isArchived && job.status === 'failed' && job.retryable ? (
-                    <button
-                      type="button"
-                      className="fab-button secondary job-retry"
-                      onClick={() => {
-                        void handleRetryJob(job.id)
-                      }}
-                    >
-                      Retry
-                    </button>
-                  ) : null}
-                </div>
-              </div>
+                    {renderSessionDetailContent(job)}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </li>
           )
         })}
       </ul>
     )
+
+    if (sessionDetailMode === 'detail-view' && isSessionDetailViewOpen && selectedJob) {
+      return renderSessionDetailView()
+    }
 
     return (
       <>
@@ -5559,6 +5926,8 @@ opens a PR.
           </div>
         </div>
 
+        {renderSessionDetailModePicker()}
+
         <div className="jobs-section-body">
           {activeJobs.length === 0 ? (
             <p className="jobs-empty">
@@ -5578,6 +5947,9 @@ opens a PR.
             </section>
           ) : null}
         </div>
+
+        {sessionDetailMode === 'drawer' ? renderSessionDrawer() : null}
+        {sessionDetailMode === 'modal' ? renderSessionModal() : null}
       </>
     )
   }
