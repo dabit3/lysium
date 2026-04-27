@@ -17,6 +17,8 @@ import {
   List,
   CheckSquare,
   Square,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -69,6 +71,7 @@ interface JobEntry {
   createdAt: number
   devinStatus?: string
   statusDetail?: string
+  archivedAt?: number
 }
 
 
@@ -308,6 +311,10 @@ const savePersistedJobs = (jobs: JobEntry[]) => {
     return
   }
 }
+
+const isJobArchived = (job: JobEntry) =>
+  typeof job.archivedAt === 'number' && Number.isFinite(job.archivedAt)
+
 const DevinLogo = ({ size = 16 }: { size?: number }) => (
   <img src="/devin.png" alt="" aria-hidden="true" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
 )
@@ -1396,6 +1403,8 @@ function App() {
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_WIDE_LAYOUT_MEDIA_QUERY).matches,
   )
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
+  const [isDesktopActivityMinimized, setIsDesktopActivityMinimized] = useState(false)
+  const [isArchivedSessionsOpen, setIsArchivedSessionsOpen] = useState(false)
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
     const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
@@ -1480,6 +1489,8 @@ function App() {
     activeTab === 'issues' ? issues : activeTab === 'pullRequests' ? pullRequests : []
   const topCard = activeDeck[0]
   const visibleCards = activeDeck.slice(0, 3)
+  const activeJobs = useMemo(() => jobs.filter((job) => !isJobArchived(job)), [jobs])
+  const archivedJobs = useMemo(() => jobs.filter(isJobArchived), [jobs])
   const availableRepos = useMemo(() => {
     const repoSet = new Set<string>()
 
@@ -1556,11 +1567,11 @@ function App() {
     activePullRequestConflictResolutionStatus === 'running'
   const isActivePullRequestConflictResolved =
     activePullRequestConflictResolutionStatus === 'resolved'
-  const runningJobsCount = jobs.reduce(
+  const runningJobsCount = activeJobs.reduce(
     (count, job) => count + (job.status === 'running' ? 1 : 0),
     0,
   )
-  const completedJobsCount = jobs.reduce(
+  const completedJobsCount = activeJobs.reduce(
     (count, job) => count + (job.status === 'success' || job.status === 'failed' ? 1 : 0),
     0,
   )
@@ -1578,11 +1589,21 @@ function App() {
   const desktopDownSwipeAction =
     activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'down')
   const showDesktopLeftNav = isDesktopLayout && hasActiveGithubFeed
-  const showDesktopWideRail = showDesktopLeftNav && isDesktopWideLayout
-  const showDesktopRightRail = showDesktopLeftNav && (showDesktopWideRail || isSettingsOpen)
-  const showDesktopSettingsPanel = showDesktopRightRail && isSettingsOpen
-  const showDesktopActivityRail = showDesktopRightRail && showDesktopWideRail && !isSettingsOpen
-  const showDesktopMainActivity = showDesktopLeftNav && !showDesktopWideRail && isDesktopActivityOpen
+  const showDesktopActivityRail =
+    showDesktopLeftNav &&
+    isDesktopWideLayout &&
+    !isSettingsOpen &&
+    !isDesktopActivityMinimized
+  const showDesktopCollapsedActivityRail =
+    showDesktopLeftNav &&
+    isDesktopWideLayout &&
+    !isSettingsOpen &&
+    isDesktopActivityMinimized
+  const showDesktopSettingsPanel = showDesktopLeftNav && isSettingsOpen
+  const showDesktopRightRail =
+    showDesktopActivityRail || showDesktopCollapsedActivityRail || showDesktopSettingsPanel
+  const showDesktopMainActivity =
+    showDesktopLeftNav && !isDesktopWideLayout && isDesktopActivityOpen
   const canTriggerDesktopSwipe =
     isDesktopLayout &&
     hasActiveGithubFeed &&
@@ -1650,6 +1671,36 @@ function App() {
       setToastMessage(null)
       setToastUndoCallback(null)
     }, resolvedTimeoutMs)
+  }
+
+  const restoreJobFromArchive = (job: JobEntry): JobEntry => {
+    const restoredJob = { ...job }
+    delete restoredJob.archivedAt
+    return restoredJob
+  }
+
+  const handleArchiveJob = (jobId: number) => {
+    setJobs((previous) =>
+      previous.map((job) =>
+        job.id === jobId ? { ...job, archivedAt: Date.now() } : job,
+      ),
+    )
+    showToast('Session archived.', () => {
+      setJobs((previous) =>
+        previous.map((job) =>
+          job.id === jobId ? restoreJobFromArchive(job) : job,
+        ),
+      )
+    })
+  }
+
+  const handleRestoreArchivedJob = (jobId: number) => {
+    setJobs((previous) =>
+      previous.map((job) =>
+        job.id === jobId ? restoreJobFromArchive(job) : job,
+      ),
+    )
+    showToast('Session restored.')
   }
 
   const updateDragOffset = (nextOffset: { x: number; y: number }) => {
@@ -4227,6 +4278,7 @@ function App() {
     setAssessedIssueLookup({})
     setAssessedPrLookup({})
     setJobs([])
+    setIsArchivedSessionsOpen(false)
     setGithubSearchScope('')
 
     if (typeof window === 'undefined') {
@@ -5393,87 +5445,139 @@ opens a PR.
 
   const renderJobsSectionContent = (options?: { closeOnLinkClick?: boolean }) => {
     const linkClickHandler = options?.closeOnLinkClick ? () => setIsJobsOpen(false) : undefined
+    const renderJobList = (
+      jobEntries: JobEntry[],
+      listOptions?: { archived?: boolean },
+    ) => (
+      <ul className="jobs-list">
+        {jobEntries.map((job) => {
+          const isArchived = listOptions?.archived === true
+
+          return (
+            <li key={job.id} className={`job-item status-${job.status}`}>
+              <div className="job-row">
+                <p className="job-label">{job.label}</p>
+                <span className={`job-status ${job.status}`}>{job.status}</span>
+              </div>
+
+              {job.devinStatus ? (
+                <div className="job-devin-status-row">
+                  <span className={`job-devin-badge ${devinStatusToBadgeClass(job.devinStatus)}`}>
+                    {job.devinStatus === 'running' ? (
+                      <span className="badge-dot-pulse" aria-hidden="true" />
+                    ) : null}
+                    {formatDevinStatusLabel(job.devinStatus)}
+                  </span>
+                  {job.statusDetail ? (
+                    <span className="job-status-detail">{job.statusDetail}</span>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <p className="job-target">{job.target}</p>
+              <p className="job-message">{job.message}</p>
+
+              <div className="job-meta-row">
+                <span className="job-time">{formatRelativeTime(job.createdAt)}</span>
+
+                <div className="job-meta-actions">
+                  {job.pullRequestUrl ? (
+                    <a
+                      href={job.pullRequestUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="job-session-link job-pr-link"
+                      onClick={linkClickHandler}
+                    >
+                      View PR
+                    </a>
+                  ) : null}
+
+                  {job.sessionUrl ? (
+                    <a
+                      href={job.sessionUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="job-session-link"
+                      onClick={linkClickHandler}
+                    >
+                      {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
+                    </a>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="job-session-link job-archive-button"
+                    onClick={() => {
+                      if (isArchived) {
+                        handleRestoreArchivedJob(job.id)
+                        return
+                      }
+
+                      handleArchiveJob(job.id)
+                    }}
+                    aria-label={`${isArchived ? 'Restore' : 'Archive'} ${job.label} session`}
+                  >
+                    {isArchived ? 'Restore' : 'Archive'}
+                  </button>
+
+                  {!isArchived && job.status === 'failed' && job.retryable ? (
+                    <button
+                      type="button"
+                      className="fab-button secondary job-retry"
+                      onClick={() => {
+                        void handleRetryJob(job.id)
+                      }}
+                    >
+                      Retry
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    )
 
     return (
       <>
         <div className="jobs-section-header">
           <h4>Sessions</h4>
-          <span>{jobs.length}</span>
+          <div className="jobs-section-header-actions">
+            <span>{activeJobs.length}</span>
+            {archivedJobs.length > 0 ? (
+              <button
+                type="button"
+                className="jobs-inline-action"
+                onClick={() => setIsArchivedSessionsOpen((previous) => !previous)}
+                aria-expanded={isArchivedSessionsOpen}
+              >
+                {isArchivedSessionsOpen ? 'Hide archived' : `Archived ${archivedJobs.length}`}
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        {jobs.length === 0 ? (
-          <p className="jobs-empty">No sessions yet.</p>
-        ) : (
-          <ul className="jobs-list">
-            {jobs.map((job) => (
-              <li key={job.id} className={`job-item status-${job.status}`}>
-                <div className="job-row">
-                  <p className="job-label">{job.label}</p>
-                  <span className={`job-status ${job.status}`}>{job.status}</span>
-                </div>
+        <div className="jobs-section-body">
+          {activeJobs.length === 0 ? (
+            <p className="jobs-empty">
+              {archivedJobs.length > 0 ? 'No active sessions.' : 'No sessions yet.'}
+            </p>
+          ) : (
+            renderJobList(activeJobs)
+          )}
 
-                {job.devinStatus ? (
-                  <div className="job-devin-status-row">
-                    <span className={`job-devin-badge ${devinStatusToBadgeClass(job.devinStatus)}`}>
-                      {job.devinStatus === 'running' ? (
-                        <span className="badge-dot-pulse" aria-hidden="true" />
-                      ) : null}
-                      {formatDevinStatusLabel(job.devinStatus)}
-                    </span>
-                    {job.statusDetail ? (
-                      <span className="job-status-detail">{job.statusDetail}</span>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <p className="job-target">{job.target}</p>
-                <p className="job-message">{job.message}</p>
-
-                <div className="job-meta-row">
-                  <span className="job-time">{formatRelativeTime(job.createdAt)}</span>
-
-                  <div className="job-meta-actions">
-                    {job.pullRequestUrl ? (
-                      <a
-                        href={job.pullRequestUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="job-session-link job-pr-link"
-                        onClick={linkClickHandler}
-                      >
-                        View PR
-                      </a>
-                    ) : null}
-
-                    {job.sessionUrl ? (
-                      <a
-                        href={job.sessionUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="job-session-link"
-                        onClick={linkClickHandler}
-                      >
-                        {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
-                      </a>
-                    ) : null}
-
-                    {job.status === 'failed' && job.retryable ? (
-                      <button
-                        type="button"
-                        className="fab-button secondary job-retry"
-                        onClick={() => {
-                          void handleRetryJob(job.id)
-                        }}
-                      >
-                        Retry
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+          {archivedJobs.length > 0 && isArchivedSessionsOpen ? (
+            <section className="jobs-archive-section" aria-label="Archived sessions">
+              <div className="jobs-archive-header">
+                <h5>Archived</h5>
+                <span>{archivedJobs.length}</span>
+              </div>
+              {renderJobList(archivedJobs, { archived: true })}
+            </section>
+          ) : null}
+        </div>
       </>
     )
   }
@@ -5484,18 +5588,51 @@ opens a PR.
     </section>
   )
 
-  const renderActivityPanel = (panelClassName?: string) => (
+  const renderActivityPanel = (
+    panelClassName?: string,
+    options?: { onMinimize?: () => void },
+  ) => (
     <section
       className={`auth-panel ${panelClassName ?? ''}`.trim()}
       aria-label="Session activity"
     >
       <div className="auth-panel-header">
         <h3>Activity</h3>
+        {options?.onMinimize ? (
+          <button
+            type="button"
+            className="activity-panel-icon-button"
+            onClick={options.onMinimize}
+            aria-label="Collapse activity panel"
+            title="Collapse activity panel"
+          >
+            <PanelRightClose size={15} />
+          </button>
+        ) : null}
       </div>
       <div className="jobs-drawer-content desktop-activity-content activity-content-single">
         {renderActivityPanelViewContent()}
       </div>
     </section>
+  )
+
+  const renderCollapsedActivityRail = () => (
+    <button
+      type="button"
+      className="desktop-collapsed-activity-rail"
+      onClick={() => setIsDesktopActivityMinimized(false)}
+      aria-label="Expand activity panel"
+      title="Expand activity panel"
+    >
+      <PanelRightOpen size={16} />
+      <span className="collapsed-activity-label">Activity</span>
+      <span className={`collapsed-activity-count ${runningJobsCount > 0 ? 'has-running' : ''}`.trim()}>
+        {runningJobsCount}
+      </span>
+      {archivedJobs.length > 0 ? (
+        <span className="collapsed-activity-archived">{archivedJobs.length} archived</span>
+      ) : null}
+    </button>
   )
 
   return (
@@ -5622,7 +5759,7 @@ opens a PR.
         ) : null}
 
         <div
-          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopSettingsPanel ? 'desktop-settings-open' : ''} ${showDesktopWideRail ? 'desktop-wide-rail' : ''}`.trim()}
+          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopSettingsPanel ? 'desktop-settings-open' : ''} ${showDesktopActivityRail || showDesktopCollapsedActivityRail ? 'desktop-wide-rail' : ''} ${showDesktopActivityRail ? 'desktop-expanded-rail' : ''} ${showDesktopCollapsedActivityRail ? 'desktop-collapsed-rail' : ''}`.trim()}
         >
           {showDesktopLeftNav ? (
             <aside className="desktop-left-nav" aria-label="Desktop navigation">
@@ -5651,19 +5788,24 @@ opens a PR.
                 >
                   {desktopPullRequestCountLabel}
                 </button>
-                {!isDesktopWideLayout ? (
-                  <button
-                    type="button"
-                    className={`desktop-nav-button ${showDesktopMainActivity ? 'is-active' : ''}`.trim()}
-                    onClick={() => {
-                      setIsDesktopActivityOpen(true)
-                      setIsSettingsOpen(false)
-                    }}
-                  >
-                    Activity
-                    <span className="jobs-count-badge">{runningJobsCount}</span>
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${showDesktopMainActivity ? 'is-active' : ''}`.trim()}
+                  onClick={() => {
+                    setIsSettingsOpen(false)
+                    if (isDesktopWideLayout) {
+                      setIsDesktopActivityOpen(false)
+                      setIsDesktopActivityMinimized(false)
+                      return
+                    }
+
+                    setIsDesktopActivityOpen(true)
+                  }}
+                  aria-pressed={showDesktopMainActivity || showDesktopActivityRail}
+                >
+                  Activity
+                  <span className="jobs-count-badge">{runningJobsCount}</span>
+                </button>
                 <button
                   type="button"
                   className={`desktop-nav-button ${isSettingsOpen ? 'is-active' : ''}`.trim()}
@@ -5829,7 +5971,9 @@ opens a PR.
 
           <div className="app-main-column">
             {showDesktopMainActivity ? (
-              renderActivityPanel('desktop-main-activity')
+              renderActivityPanel('desktop-main-activity', {
+                onMinimize: () => setIsDesktopActivityOpen(false),
+              })
             ) : (
               <>
                 {!hasActiveGithubFeed ? (
@@ -6532,7 +6676,20 @@ opens a PR.
                     exit={desktopRailViewExit}
                     transition={desktopRailViewTransition}
                   >
-                    {renderActivityPanel('desktop-activity-panel')}
+                    {renderActivityPanel('desktop-activity-panel', {
+                      onMinimize: () => setIsDesktopActivityMinimized(true),
+                    })}
+                  </motion.div>
+                ) : showDesktopCollapsedActivityRail ? (
+                  <motion.div
+                    key="desktop-side-rail-activity-collapsed"
+                    className="desktop-side-rail-view collapsed-activity-view"
+                    initial={desktopRailViewInitial}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={desktopRailViewExit}
+                    transition={desktopRailViewTransition}
+                  >
+                    {renderCollapsedActivityRail()}
                   </motion.div>
                 ) : null}
               </AnimatePresence>
