@@ -17,12 +17,26 @@ import {
   List,
   CheckSquare,
   Square,
+  PanelRightClose,
+  PanelRightOpen,
+  ChevronDown,
+  ChevronUp,
+  ArrowLeft,
+  ExternalLink,
+  Clock,
+  Tag,
+  GitPullRequest,
+  Copy,
+  Archive,
+  ArchiveRestore,
+  RotateCcw,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
 
 type TabKey = 'issues' | 'pullRequests' | 'code'
 type SwipeDirection = 'left' | 'right' | 'down'
+type SessionDetailMode = 'inline' | 'drawer' | 'modal' | 'detail-view'
 
 interface BaseCard {
   id: number
@@ -69,6 +83,7 @@ interface JobEntry {
   createdAt: number
   devinStatus?: string
   statusDetail?: string
+  archivedAt?: number
 }
 
 
@@ -308,6 +323,10 @@ const savePersistedJobs = (jobs: JobEntry[]) => {
     return
   }
 }
+
+const isJobArchived = (job: JobEntry) =>
+  typeof job.archivedAt === 'number' && Number.isFinite(job.archivedAt)
+
 const DevinLogo = ({ size = 16 }: { size?: number }) => (
   <img src="/devin.png" alt="" aria-hidden="true" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
 )
@@ -1396,6 +1415,14 @@ function App() {
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_WIDE_LAYOUT_MEDIA_QUERY).matches,
   )
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
+  const [isDesktopActivityMinimized, setIsDesktopActivityMinimized] = useState(false)
+  const [isArchivedSessionsOpen, setIsArchivedSessionsOpen] = useState(false)
+  const [sessionDetailMode, setSessionDetailMode] = useState<SessionDetailMode>('inline')
+  const [expandedJobId, setExpandedJobId] = useState<number | null>(null)
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+  const [isSessionDrawerOpen, setIsSessionDrawerOpen] = useState(false)
+  const [isSessionModalOpen, setIsSessionModalOpen] = useState(false)
+  const [isSessionDetailViewOpen, setIsSessionDetailViewOpen] = useState(false)
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
     const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
@@ -1480,6 +1507,8 @@ function App() {
     activeTab === 'issues' ? issues : activeTab === 'pullRequests' ? pullRequests : []
   const topCard = activeDeck[0]
   const visibleCards = activeDeck.slice(0, 3)
+  const activeJobs = useMemo(() => jobs.filter((job) => !isJobArchived(job)), [jobs])
+  const archivedJobs = useMemo(() => jobs.filter(isJobArchived), [jobs])
   const availableRepos = useMemo(() => {
     const repoSet = new Set<string>()
 
@@ -1556,11 +1585,11 @@ function App() {
     activePullRequestConflictResolutionStatus === 'running'
   const isActivePullRequestConflictResolved =
     activePullRequestConflictResolutionStatus === 'resolved'
-  const runningJobsCount = jobs.reduce(
+  const runningJobsCount = activeJobs.reduce(
     (count, job) => count + (job.status === 'running' ? 1 : 0),
     0,
   )
-  const completedJobsCount = jobs.reduce(
+  const completedJobsCount = activeJobs.reduce(
     (count, job) => count + (job.status === 'success' || job.status === 'failed' ? 1 : 0),
     0,
   )
@@ -1578,11 +1607,21 @@ function App() {
   const desktopDownSwipeAction =
     activeTab === 'code' ? null : getSwipeAction(desktopSwipeTab, 'down')
   const showDesktopLeftNav = isDesktopLayout && hasActiveGithubFeed
-  const showDesktopWideRail = showDesktopLeftNav && isDesktopWideLayout
-  const showDesktopRightRail = showDesktopLeftNav && (showDesktopWideRail || isSettingsOpen)
-  const showDesktopSettingsPanel = showDesktopRightRail && isSettingsOpen
-  const showDesktopActivityRail = showDesktopRightRail && showDesktopWideRail && !isSettingsOpen
-  const showDesktopMainActivity = showDesktopLeftNav && !showDesktopWideRail && isDesktopActivityOpen
+  const showDesktopActivityRail =
+    showDesktopLeftNav &&
+    isDesktopWideLayout &&
+    !isSettingsOpen &&
+    !isDesktopActivityMinimized
+  const showDesktopCollapsedActivityRail =
+    showDesktopLeftNav &&
+    isDesktopWideLayout &&
+    !isSettingsOpen &&
+    isDesktopActivityMinimized
+  const showDesktopSettingsPanel = showDesktopLeftNav && isSettingsOpen
+  const showDesktopRightRail =
+    showDesktopActivityRail || showDesktopCollapsedActivityRail || showDesktopSettingsPanel
+  const showDesktopMainActivity =
+    showDesktopLeftNav && !isDesktopWideLayout && isDesktopActivityOpen
   const canTriggerDesktopSwipe =
     isDesktopLayout &&
     hasActiveGithubFeed &&
@@ -1650,6 +1689,82 @@ function App() {
       setToastMessage(null)
       setToastUndoCallback(null)
     }, resolvedTimeoutMs)
+  }
+
+  const restoreJobFromArchive = (job: JobEntry): JobEntry => {
+    const restoredJob = { ...job }
+    delete restoredJob.archivedAt
+    return restoredJob
+  }
+
+  const handleArchiveJob = (jobId: number) => {
+    setJobs((previous) =>
+      previous.map((job) =>
+        job.id === jobId ? { ...job, archivedAt: Date.now() } : job,
+      ),
+    )
+    showToast('Session archived.', () => {
+      setJobs((previous) =>
+        previous.map((job) =>
+          job.id === jobId ? restoreJobFromArchive(job) : job,
+        ),
+      )
+    })
+  }
+
+  const handleRestoreArchivedJob = (jobId: number) => {
+    setJobs((previous) =>
+      previous.map((job) =>
+        job.id === jobId ? restoreJobFromArchive(job) : job,
+      ),
+    )
+    showToast('Session restored.')
+  }
+
+  const openSessionDetail = (job: JobEntry) => {
+    setSelectedJobId(job.id)
+    switch (sessionDetailMode) {
+      case 'inline':
+        setExpandedJobId((prev) => (prev === job.id ? null : job.id))
+        break
+      case 'drawer':
+        setIsSessionDrawerOpen(true)
+        break
+      case 'modal':
+        setIsSessionModalOpen(true)
+        break
+      case 'detail-view':
+        setIsSessionDetailViewOpen(true)
+        break
+    }
+  }
+
+  const closeSessionDetail = () => {
+    setSelectedJobId(null)
+    setExpandedJobId(null)
+    setIsSessionDrawerOpen(false)
+    setIsSessionModalOpen(false)
+    setIsSessionDetailViewOpen(false)
+  }
+
+  const selectedJob = useMemo(
+    () => (selectedJobId !== null ? jobs.find((j) => j.id === selectedJobId) ?? null : null),
+    [jobs, selectedJobId],
+  )
+
+  const formatAbsoluteTime = (timestamp: number) => {
+    const date = new Date(timestamp)
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const copyToClipboard = (text: string) => {
+    void navigator.clipboard.writeText(text)
+    showToast('Copied to clipboard.')
   }
 
   const updateDragOffset = (nextOffset: { x: number; y: number }) => {
@@ -4227,6 +4342,7 @@ function App() {
     setAssessedIssueLookup({})
     setAssessedPrLookup({})
     setJobs([])
+    setIsArchivedSessionsOpen(false)
     setGithubSearchScope('')
 
     if (typeof window === 'undefined') {
@@ -5391,25 +5507,297 @@ opens a PR.
     </section>
   )
 
-  const renderJobsSectionContent = (options?: { closeOnLinkClick?: boolean }) => {
-    const linkClickHandler = options?.closeOnLinkClick ? () => setIsJobsOpen(false) : undefined
+  const renderSessionDetailContent = (job: JobEntry) => {
+    const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
+    const isArchived = isJobArchived(job)
 
     return (
-      <>
-        <div className="jobs-section-header">
-          <h4>Sessions</h4>
-          <span>{jobs.length}</span>
+      <div className="session-detail-body">
+        <div className="session-detail-field">
+          <span className="session-detail-label">
+            <Tag size={12} /> Type
+          </span>
+          <span className="session-detail-value">{job.label}</span>
         </div>
 
-        {jobs.length === 0 ? (
-          <p className="jobs-empty">No sessions yet.</p>
-        ) : (
-          <ul className="jobs-list">
-            {jobs.map((job) => (
-              <li key={job.id} className={`job-item status-${job.status}`}>
+        <div className="session-detail-field">
+          <span className="session-detail-label">
+            <Activity size={12} /> Status
+          </span>
+          <span className="session-detail-value">
+            <span className={`job-status ${job.status}`}>{job.status}</span>
+            {job.devinStatus ? (
+              <span className={`job-devin-badge ${devinStatusToBadgeClass(job.devinStatus)}`}>
+                {job.devinStatus === 'running' ? (
+                  <span className="badge-dot-pulse" aria-hidden="true" />
+                ) : null}
+                {formatDevinStatusLabel(job.devinStatus)}
+              </span>
+            ) : null}
+          </span>
+        </div>
+
+        {job.statusDetail ? (
+          <div className="session-detail-field">
+            <span className="session-detail-label">Detail</span>
+            <span className="session-detail-value session-detail-status-detail">{job.statusDetail}</span>
+          </div>
+        ) : null}
+
+        <div className="session-detail-field">
+          <span className="session-detail-label">
+            <Github size={12} /> Target
+          </span>
+          <span className="session-detail-value">{job.target}</span>
+        </div>
+
+        <div className="session-detail-field">
+          <span className="session-detail-label">Prompt</span>
+          <span className="session-detail-value session-detail-message">{job.message}</span>
+        </div>
+
+        <div className="session-detail-field">
+          <span className="session-detail-label">
+            <Clock size={12} /> Created
+          </span>
+          <span className="session-detail-value">
+            {formatAbsoluteTime(job.createdAt)}
+            <span className="session-detail-relative-time">({formatRelativeTime(job.createdAt)})</span>
+          </span>
+        </div>
+
+        {sessionId ? (
+          <div className="session-detail-field">
+            <span className="session-detail-label">Session ID</span>
+            <span className="session-detail-value session-detail-id-row">
+              <code className="session-detail-id">{sessionId}</code>
+              <button
+                type="button"
+                className="session-detail-copy-button"
+                onClick={() => copyToClipboard(sessionId)}
+                aria-label="Copy session ID"
+              >
+                <Copy size={12} />
+              </button>
+            </span>
+          </div>
+        ) : null}
+
+        {isArchived && job.archivedAt ? (
+          <div className="session-detail-field">
+            <span className="session-detail-label">
+              <Archive size={12} /> Archived
+            </span>
+            <span className="session-detail-value">{formatAbsoluteTime(job.archivedAt)}</span>
+          </div>
+        ) : null}
+
+        <div className="session-detail-actions">
+          {job.pullRequestUrl ? (
+            <a
+              href={job.pullRequestUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="session-detail-action-button"
+            >
+              <GitPullRequest size={13} /> View PR
+            </a>
+          ) : null}
+
+          {job.sessionUrl ? (
+            <a
+              href={job.sessionUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="session-detail-action-button"
+            >
+              <ExternalLink size={13} />
+              {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
+            </a>
+          ) : null}
+
+          <button
+            type="button"
+            className="session-detail-action-button"
+            onClick={() => {
+              if (isArchived) {
+                handleRestoreArchivedJob(job.id)
+              } else {
+                handleArchiveJob(job.id)
+              }
+            }}
+          >
+            {isArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+            {isArchived ? 'Restore' : 'Archive'}
+          </button>
+
+          {!isArchived && job.status === 'failed' && job.retryable ? (
+            <button
+              type="button"
+              className="session-detail-action-button session-detail-retry"
+              onClick={() => { void handleRetryJob(job.id) }}
+            >
+              <RotateCcw size={13} /> Retry
+            </button>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
+  const renderSessionDetailModePicker = () => (
+    <div className="session-detail-mode-picker">
+      <span className="session-detail-mode-label">Detail view:</span>
+      {(['inline', 'drawer', 'modal', 'detail-view'] as SessionDetailMode[]).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          className={`session-detail-mode-option ${sessionDetailMode === mode ? 'is-active' : ''}`.trim()}
+          onClick={() => {
+            closeSessionDetail()
+            setSessionDetailMode(mode)
+          }}
+        >
+          {mode === 'inline' ? 'Inline' : mode === 'drawer' ? 'Drawer' : mode === 'modal' ? 'Modal' : 'Detail'}
+        </button>
+      ))}
+    </div>
+  )
+
+  const renderSessionDrawer = () => {
+    if (!isSessionDrawerOpen || !selectedJob) return null
+
+    return (
+      <div className="session-drawer-overlay" onClick={closeSessionDetail}>
+        <motion.aside
+          className="session-drawer"
+          initial={{ x: '100%' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100%' }}
+          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Session details drawer"
+        >
+          <div className="session-drawer-header">
+            <h4>{selectedJob.label}</h4>
+            <button
+              type="button"
+              className="activity-panel-icon-button"
+              onClick={closeSessionDetail}
+              aria-label="Close drawer"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <div className="session-drawer-body">
+            {renderSessionDetailContent(selectedJob)}
+          </div>
+        </motion.aside>
+      </div>
+    )
+  }
+
+  const renderSessionModal = () => {
+    if (!isSessionModalOpen || !selectedJob) return null
+
+    return (
+      <div className="session-modal-overlay" onClick={closeSessionDetail}>
+        <motion.div
+          className="session-modal"
+          initial={{ opacity: 0, scale: 0.95, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 12 }}
+          transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label="Session details"
+          aria-modal="true"
+        >
+          <div className="session-modal-header">
+            <h4>{selectedJob.label}</h4>
+            <button
+              type="button"
+              className="activity-panel-icon-button"
+              onClick={closeSessionDetail}
+              aria-label="Close modal"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <div className="session-modal-body">
+            {renderSessionDetailContent(selectedJob)}
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
+  const renderSessionDetailView = () => {
+    if (!isSessionDetailViewOpen || !selectedJob) return null
+
+    return (
+      <div className="session-detail-view">
+        <div className="session-detail-view-header">
+          <button
+            type="button"
+            className="session-detail-back-button"
+            onClick={closeSessionDetail}
+            aria-label="Back to sessions"
+          >
+            <ArrowLeft size={15} />
+            <span>Sessions</span>
+          </button>
+        </div>
+        <div className="session-detail-view-title">
+          <h4>{selectedJob.label}</h4>
+          <span className={`job-status ${selectedJob.status}`}>{selectedJob.status}</span>
+        </div>
+        <div className="session-detail-view-body">
+          {renderSessionDetailContent(selectedJob)}
+        </div>
+      </div>
+    )
+  }
+
+  const renderJobsSectionContent = (options?: { closeOnLinkClick?: boolean }) => {
+    const linkClickHandler = options?.closeOnLinkClick ? () => setIsJobsOpen(false) : undefined
+    const renderJobList = (
+      jobEntries: JobEntry[],
+      listOptions?: { archived?: boolean },
+    ) => (
+      <ul className="jobs-list">
+        {jobEntries.map((job) => {
+          const isArchived = listOptions?.archived === true
+          const isExpanded = sessionDetailMode === 'inline' && expandedJobId === job.id
+
+          return (
+            <li
+              key={job.id}
+              className={`job-item status-${job.status} ${isExpanded ? 'job-item-expanded' : ''} job-item-clickable`.trim()}
+            >
+              <div
+                className="job-item-click-target"
+                onClick={() => openSessionDetail(job)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    openSessionDetail(job)
+                  }
+                }}
+                aria-expanded={sessionDetailMode === 'inline' ? isExpanded : undefined}
+              >
                 <div className="job-row">
                   <p className="job-label">{job.label}</p>
-                  <span className={`job-status ${job.status}`}>{job.status}</span>
+                  <div className="job-row-right">
+                    <span className={`job-status ${job.status}`}>{job.status}</span>
+                    {sessionDetailMode === 'inline' ? (
+                      isExpanded ? <ChevronUp size={14} className="job-expand-icon" /> : <ChevronDown size={14} className="job-expand-icon" />
+                    ) : (
+                      <ExternalLink size={12} className="job-expand-icon" />
+                    )}
+                  </div>
                 </div>
 
                 {job.devinStatus ? (
@@ -5427,8 +5815,9 @@ opens a PR.
                 ) : null}
 
                 <p className="job-target">{job.target}</p>
-                <p className="job-message">{job.message}</p>
+              </div>
 
+              {!isExpanded ? (
                 <div className="job-meta-row">
                   <span className="job-time">{formatRelativeTime(job.createdAt)}</span>
 
@@ -5439,7 +5828,10 @@ opens a PR.
                         target="_blank"
                         rel="noreferrer noopener"
                         className="job-session-link job-pr-link"
-                        onClick={linkClickHandler}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          linkClickHandler?.()
+                        }}
                       >
                         View PR
                       </a>
@@ -5451,17 +5843,37 @@ opens a PR.
                         target="_blank"
                         rel="noreferrer noopener"
                         className="job-session-link"
-                        onClick={linkClickHandler}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          linkClickHandler?.()
+                        }}
                       >
                         {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
                       </a>
                     ) : null}
 
-                    {job.status === 'failed' && job.retryable ? (
+                    <button
+                      type="button"
+                      className="job-session-link job-archive-button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (isArchived) {
+                          handleRestoreArchivedJob(job.id)
+                          return
+                        }
+                        handleArchiveJob(job.id)
+                      }}
+                      aria-label={`${isArchived ? 'Restore' : 'Archive'} ${job.label} session`}
+                    >
+                      {isArchived ? 'Restore' : 'Archive'}
+                    </button>
+
+                    {!isArchived && job.status === 'failed' && job.retryable ? (
                       <button
                         type="button"
                         className="fab-button secondary job-retry"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           void handleRetryJob(job.id)
                         }}
                       >
@@ -5470,10 +5882,74 @@ opens a PR.
                     ) : null}
                   </div>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
+              ) : null}
+
+              <AnimatePresence>
+                {isExpanded ? (
+                  <motion.div
+                    className="job-inline-detail"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: 'easeInOut' }}
+                  >
+                    {renderSessionDetailContent(job)}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </li>
+          )
+        })}
+      </ul>
+    )
+
+    if (sessionDetailMode === 'detail-view' && isSessionDetailViewOpen && selectedJob) {
+      return renderSessionDetailView()
+    }
+
+    return (
+      <>
+        <div className="jobs-section-header">
+          <h4>Sessions</h4>
+          <div className="jobs-section-header-actions">
+            <span>{activeJobs.length}</span>
+            {archivedJobs.length > 0 ? (
+              <button
+                type="button"
+                className="jobs-inline-action"
+                onClick={() => setIsArchivedSessionsOpen((previous) => !previous)}
+                aria-expanded={isArchivedSessionsOpen}
+              >
+                {isArchivedSessionsOpen ? 'Hide archived' : `Archived ${archivedJobs.length}`}
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {renderSessionDetailModePicker()}
+
+        <div className="jobs-section-body">
+          {activeJobs.length === 0 ? (
+            <p className="jobs-empty">
+              {archivedJobs.length > 0 ? 'No active sessions.' : 'No sessions yet.'}
+            </p>
+          ) : (
+            renderJobList(activeJobs)
+          )}
+
+          {archivedJobs.length > 0 && isArchivedSessionsOpen ? (
+            <section className="jobs-archive-section" aria-label="Archived sessions">
+              <div className="jobs-archive-header">
+                <h5>Archived</h5>
+                <span>{archivedJobs.length}</span>
+              </div>
+              {renderJobList(archivedJobs, { archived: true })}
+            </section>
+          ) : null}
+        </div>
+
+        {sessionDetailMode === 'drawer' ? renderSessionDrawer() : null}
+        {sessionDetailMode === 'modal' ? renderSessionModal() : null}
       </>
     )
   }
@@ -5484,18 +5960,51 @@ opens a PR.
     </section>
   )
 
-  const renderActivityPanel = (panelClassName?: string) => (
+  const renderActivityPanel = (
+    panelClassName?: string,
+    options?: { onMinimize?: () => void },
+  ) => (
     <section
       className={`auth-panel ${panelClassName ?? ''}`.trim()}
       aria-label="Session activity"
     >
       <div className="auth-panel-header">
         <h3>Activity</h3>
+        {options?.onMinimize ? (
+          <button
+            type="button"
+            className="activity-panel-icon-button"
+            onClick={options.onMinimize}
+            aria-label="Collapse activity panel"
+            title="Collapse activity panel"
+          >
+            <PanelRightClose size={15} />
+          </button>
+        ) : null}
       </div>
       <div className="jobs-drawer-content desktop-activity-content activity-content-single">
         {renderActivityPanelViewContent()}
       </div>
     </section>
+  )
+
+  const renderCollapsedActivityRail = () => (
+    <button
+      type="button"
+      className="desktop-collapsed-activity-rail"
+      onClick={() => setIsDesktopActivityMinimized(false)}
+      aria-label="Expand activity panel"
+      title="Expand activity panel"
+    >
+      <PanelRightOpen size={16} />
+      <span className="collapsed-activity-label">Activity</span>
+      <span className={`collapsed-activity-count ${runningJobsCount > 0 ? 'has-running' : ''}`.trim()}>
+        {runningJobsCount}
+      </span>
+      {archivedJobs.length > 0 ? (
+        <span className="collapsed-activity-archived">{archivedJobs.length} archived</span>
+      ) : null}
+    </button>
   )
 
   return (
@@ -5622,7 +6131,7 @@ opens a PR.
         ) : null}
 
         <div
-          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopSettingsPanel ? 'desktop-settings-open' : ''} ${showDesktopWideRail ? 'desktop-wide-rail' : ''}`.trim()}
+          className={`app-content-layout ${showDesktopLeftNav ? 'desktop-nav-layout' : ''} ${showDesktopSettingsPanel ? 'desktop-settings-open' : ''} ${showDesktopActivityRail || showDesktopCollapsedActivityRail ? 'desktop-wide-rail' : ''} ${showDesktopActivityRail ? 'desktop-expanded-rail' : ''} ${showDesktopCollapsedActivityRail ? 'desktop-collapsed-rail' : ''}`.trim()}
         >
           {showDesktopLeftNav ? (
             <aside className="desktop-left-nav" aria-label="Desktop navigation">
@@ -5651,19 +6160,24 @@ opens a PR.
                 >
                   {desktopPullRequestCountLabel}
                 </button>
-                {!isDesktopWideLayout ? (
-                  <button
-                    type="button"
-                    className={`desktop-nav-button ${showDesktopMainActivity ? 'is-active' : ''}`.trim()}
-                    onClick={() => {
-                      setIsDesktopActivityOpen(true)
-                      setIsSettingsOpen(false)
-                    }}
-                  >
-                    Activity
-                    <span className="jobs-count-badge">{runningJobsCount}</span>
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className={`desktop-nav-button ${showDesktopMainActivity ? 'is-active' : ''}`.trim()}
+                  onClick={() => {
+                    setIsSettingsOpen(false)
+                    if (isDesktopWideLayout) {
+                      setIsDesktopActivityOpen(false)
+                      setIsDesktopActivityMinimized(false)
+                      return
+                    }
+
+                    setIsDesktopActivityOpen(true)
+                  }}
+                  aria-pressed={showDesktopMainActivity || showDesktopActivityRail}
+                >
+                  Activity
+                  <span className="jobs-count-badge">{runningJobsCount}</span>
+                </button>
                 <button
                   type="button"
                   className={`desktop-nav-button ${isSettingsOpen ? 'is-active' : ''}`.trim()}
@@ -5829,7 +6343,9 @@ opens a PR.
 
           <div className="app-main-column">
             {showDesktopMainActivity ? (
-              renderActivityPanel('desktop-main-activity')
+              renderActivityPanel('desktop-main-activity', {
+                onMinimize: () => setIsDesktopActivityOpen(false),
+              })
             ) : (
               <>
                 {!hasActiveGithubFeed ? (
@@ -6532,7 +7048,20 @@ opens a PR.
                     exit={desktopRailViewExit}
                     transition={desktopRailViewTransition}
                   >
-                    {renderActivityPanel('desktop-activity-panel')}
+                    {renderActivityPanel('desktop-activity-panel', {
+                      onMinimize: () => setIsDesktopActivityMinimized(true),
+                    })}
+                  </motion.div>
+                ) : showDesktopCollapsedActivityRail ? (
+                  <motion.div
+                    key="desktop-side-rail-activity-collapsed"
+                    className="desktop-side-rail-view collapsed-activity-view"
+                    initial={desktopRailViewInitial}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={desktopRailViewExit}
+                    transition={desktopRailViewTransition}
+                  >
+                    {renderCollapsedActivityRail()}
                   </motion.div>
                 ) : null}
               </AnimatePresence>
