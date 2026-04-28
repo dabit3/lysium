@@ -317,6 +317,46 @@
   color: #888;
 }
 
+[data-theme="light"] .job-row-clickable:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="light"] .job-item-expanded {
+  border-color: rgba(0, 134, 228, 0.3);
+}
+
+[data-theme="light"] .session-detail-panel {
+  border-top-color: #e0e0e0;
+}
+
+[data-theme="light"] .session-detail-pr-link {
+  color: #004a8f;
+}
+
+[data-theme="light"] .session-detail-pr-state-open {
+  color: #0066b8;
+  background: rgba(0, 102, 184, 0.06);
+  border-color: rgba(0, 102, 184, 0.2);
+}
+
+[data-theme="light"] .session-detail-pr-state-merged {
+  color: #6a3d8f;
+  background: rgba(106, 61, 143, 0.06);
+  border-color: rgba(106, 61, 143, 0.2);
+}
+
+[data-theme="light"] .session-detail-pr-state-closed {
+  color: #b83030;
+  background: rgba(184, 48, 48, 0.06);
+  border-color: rgba(184, 48, 48, 0.2);
+}
+
+[data-theme="light"] .session-detail-tag {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #555;
+}
+
 /* Light theme: modal */
 [data-theme="light"] .modal-backdrop {
   background: rgba(0, 0, 0, 0.35);
@@ -2510,6 +2550,274 @@
   border-color: rgba(0, 134, 228, 0.6);
   background: rgba(0, 134, 228, 0.14);
   color: #a8d8ff;
+}
+
+/* Job item expand / clickable row */
+
+.job-row-clickable {
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: background 120ms ease;
+}
+
+.job-row-clickable:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.job-row-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.job-expand-icon {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.job-item-expanded {
+  border-color: rgba(0, 134, 228, 0.35);
+}
+
+/* Session detail panel */
+
+.session-detail-panel {
+  padding: 0.6rem 0;
+  display: grid;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 0.3rem;
+}
+
+.session-detail-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.session-detail-empty {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.session-detail-title {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.session-detail-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.session-detail-status-text {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.session-detail-refresh-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.spinner-tiny {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+}
+
+.session-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 0.75rem;
+}
+
+.session-detail-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.session-detail-field svg {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.session-detail-field-label {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.session-detail-field-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-detail-section {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.session-detail-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.64rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+
+.session-detail-section-label svg {
+  flex-shrink: 0;
+}
+
+.session-detail-pr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.session-detail-pr-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.session-detail-pr-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.66rem;
+  color: #a8d8ff;
+  text-decoration: none;
+  min-width: 0;
+}
+
+.session-detail-pr-link:hover {
+  text-decoration: underline;
+}
+
+.session-detail-pr-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-detail-pr-link svg {
+  flex-shrink: 0;
+}
+
+.session-detail-pr-state {
+  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-xs);
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.session-detail-pr-state-open {
+  color: #7ec8e3;
+  background: rgba(0, 134, 228, 0.1);
+  border-color: rgba(0, 134, 228, 0.25);
+}
+
+.session-detail-pr-state-merged {
+  color: #c49edc;
+  background: rgba(160, 120, 200, 0.1);
+  border-color: rgba(160, 120, 200, 0.25);
+}
+
+.session-detail-pr-state-closed {
+  color: #e07070;
+  background: rgba(224, 112, 112, 0.08);
+  border-color: rgba(224, 112, 112, 0.2);
+}
+
+.session-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.session-detail-tag {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-xs);
+  background: rgba(160, 160, 160, 0.1);
+  border: 1px solid rgba(160, 160, 160, 0.2);
+  color: var(--text-muted);
+}
+
+.session-detail-child-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.session-detail-child-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: var(--font-mono);
+}
+
+.session-detail-child-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.session-detail-child-link svg {
+  flex-shrink: 0;
+}
+
+.session-detail-child-overflow {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+.session-detail-open-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.2rem;
+}
+
+.session-detail-open-link {
+  gap: 0.35rem;
 }
 
 .fab-row {
