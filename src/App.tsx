@@ -1475,6 +1475,8 @@ function App() {
   )
   const nextActionIdRef = useRef(1)
   // Action tracking kept as no-ops; UI only shows session activity now.
+  const detailFetchIdRef = useRef(0)
+  const pollDetailSessionRef = useRef<() => Promise<void>>(async () => {})
   const mergeConflictPollingLookupRef = useRef<Record<string, true>>({})
   const syncGithubFeedRef = useRef<
     ((options?: { autoTriggered?: boolean }) => Promise<void>) | null
@@ -4453,50 +4455,68 @@ function App() {
     const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
     if (!sessionId) return
 
+    const fetchId = ++detailFetchIdRef.current
     setIsDetailLoading(true)
     fetchDevinSessionById(sessionId)
-      .then((data) => setDetailSessionData(data))
+      .then((data) => {
+        if (detailFetchIdRef.current === fetchId) {
+          setDetailSessionData(data)
+        }
+      })
       .catch(() => {})
-      .finally(() => setIsDetailLoading(false))
+      .finally(() => {
+        if (detailFetchIdRef.current === fetchId) {
+          setIsDetailLoading(false)
+        }
+      })
   }
 
   const closeSessionDetail = () => {
+    detailFetchIdRef.current += 1
     setActiveDetailJobId(null)
     setDetailSessionData(null)
     setIsDetailLoading(false)
   }
 
-  useEffect(() => {
+  const activeDetailJob = activeDetailJobId !== null
+    ? jobs.find((j) => j.id === activeDetailJobId)
+    : undefined
+  const isDetailTerminal = isTerminalDevinStatus(activeDetailJob?.devinStatus)
+
+  pollDetailSessionRef.current = async () => {
     if (activeDetailJobId === null) return
 
     const job = jobs.find((j) => j.id === activeDetailJobId)
-    if (!job) {
-      closeSessionDetail()
-      return
-    }
+    if (!job) return
 
     const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
     if (!sessionId) return
 
-    if (isTerminalDevinStatus(job.devinStatus)) return
+    try {
+      const data = await fetchDevinSessionById(sessionId)
+      setDetailSessionData(data)
+      const nextDevinStatus = typeof data.status === 'string' ? data.status : undefined
+      const nextStatusDetail =
+        typeof data.status_detail === 'string' && data.status_detail.trim().length > 0
+          ? data.status_detail.trim()
+          : undefined
+      updateJob(activeDetailJobId, { devinStatus: nextDevinStatus, statusDetail: nextStatusDetail })
+    } catch {
+      // silently continue
+    }
+  }
 
-    const intervalId = window.setInterval(async () => {
-      try {
-        const data = await fetchDevinSessionById(sessionId)
-        setDetailSessionData(data)
-        const nextDevinStatus = typeof data.status === 'string' ? data.status : undefined
-        const nextStatusDetail =
-          typeof data.status_detail === 'string' && data.status_detail.trim().length > 0
-            ? data.status_detail.trim()
-            : undefined
-        updateJob(activeDetailJobId, { devinStatus: nextDevinStatus, statusDetail: nextStatusDetail })
-      } catch {
-        // silently continue
-      }
-    }, 5000)
+  useEffect(() => {
+    if (activeDetailJobId === null || isDetailTerminal) return
+
+    const tick = () => {
+      void pollDetailSessionRef.current?.()
+    }
+
+    const intervalId = window.setInterval(tick, 5000)
 
     return () => window.clearInterval(intervalId)
-  }, [activeDetailJobId, jobs])
+  }, [activeDetailJobId, isDetailTerminal])
 
   useEffect(() => {
     if (!hasDevinSession || !hasDevinOrgId || !hasGithubOauthSession || !hasGithubScope) {
