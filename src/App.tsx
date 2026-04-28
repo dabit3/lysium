@@ -1479,6 +1479,7 @@ function App() {
   const [isLoadingSessionDetail, setIsLoadingSessionDetail] = useState(false)
   const [sessionDetailError, setSessionDetailError] = useState<string | null>(null)
   const sessionDetailPollRef = useRef<number | null>(null)
+  const sessionDetailRequestIdRef = useRef(0)
   const pointerIdRef = useRef<number | null>(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const dragOffsetRef = useRef({ x: 0, y: 0 })
@@ -2500,6 +2501,9 @@ function App() {
 
     if (!sessionId) return
 
+    const requestId = sessionDetailRequestIdRef.current + 1
+    sessionDetailRequestIdRef.current = requestId
+
     setSelectedJobId(jobId)
     setSessionDetailData(null)
     setSessionDetailError(null)
@@ -2508,14 +2512,18 @@ function App() {
     const fetchDetail = async () => {
       try {
         const data = await fetchDevinSessionById(sessionId)
+        if (sessionDetailRequestIdRef.current !== requestId) return
         setSessionDetailData(data as DevinSessionDetail)
         setSessionDetailError(null)
       } catch (error) {
+        if (sessionDetailRequestIdRef.current !== requestId) return
         setSessionDetailError(
           error instanceof Error ? error.message : 'Failed to load session details.',
         )
       } finally {
-        setIsLoadingSessionDetail(false)
+        if (sessionDetailRequestIdRef.current === requestId) {
+          setIsLoadingSessionDetail(false)
+        }
       }
     }
 
@@ -2523,6 +2531,7 @@ function App() {
   }
 
   const closeSessionDetail = () => {
+    sessionDetailRequestIdRef.current += 1
     if (sessionDetailPollRef.current !== null) {
       window.clearInterval(sessionDetailPollRef.current)
       sessionDetailPollRef.current = null
