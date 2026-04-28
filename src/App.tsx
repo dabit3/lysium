@@ -17,6 +17,13 @@ import {
   List,
   CheckSquare,
   Square,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  Clock,
+  Zap,
+  GitPullRequest,
+  Tag,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -90,6 +97,87 @@ interface DevinSessionPayload {
   status_detail?: string | null
   structured_output?: unknown
   [key: string]: unknown
+}
+
+interface SessionDetailData {
+  sessionId: string
+  url: string
+  status: string
+  statusDetail: string | null
+  title: string | null
+  createdAt: number | null
+  updatedAt: number | null
+  acusConsumed: number | null
+  pullRequests: Array<{ prUrl: string; prState: string | null }>
+  tags: string[]
+  childSessionIds: string[]
+  parentSessionId: string | null
+  isAdvanced: boolean
+  structuredOutput: Record<string, unknown> | null
+}
+
+const parseSessionDetailData = (data: DevinSessionPayload): SessionDetailData => ({
+  sessionId: typeof data.session_id === 'string' ? data.session_id : '',
+  url: typeof data.url === 'string' ? data.url : '',
+  status: typeof data.status === 'string' ? data.status : 'unknown',
+  statusDetail:
+    typeof data.status_detail === 'string' && data.status_detail.trim().length > 0
+      ? data.status_detail.trim()
+      : null,
+  title: typeof data.title === 'string' && data.title.trim().length > 0 ? data.title.trim() : null,
+  createdAt: typeof data.created_at === 'number' ? data.created_at : null,
+  updatedAt: typeof data.updated_at === 'number' ? data.updated_at : null,
+  acusConsumed: typeof data.acus_consumed === 'number' ? data.acus_consumed : null,
+  pullRequests: Array.isArray(data.pull_requests)
+    ? (data.pull_requests as Array<Record<string, unknown>>)
+        .filter((pr) => typeof pr.pr_url === 'string')
+        .map((pr) => ({
+          prUrl: pr.pr_url as string,
+          prState: typeof pr.pr_state === 'string' ? pr.pr_state : null,
+        }))
+    : [],
+  tags: Array.isArray(data.tags)
+    ? (data.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+    : [],
+  childSessionIds: Array.isArray(data.child_session_ids)
+    ? (data.child_session_ids as unknown[]).filter((s): s is string => typeof s === 'string')
+    : [],
+  parentSessionId:
+    typeof data.parent_session_id === 'string' && data.parent_session_id.trim().length > 0
+      ? data.parent_session_id.trim()
+      : null,
+  isAdvanced: data.is_advanced === true,
+  structuredOutput:
+    data.structured_output && typeof data.structured_output === 'object'
+      ? (data.structured_output as Record<string, unknown>)
+      : null,
+})
+
+const formatStatusDetailLabel = (detail: string): string => {
+  switch (detail) {
+    case 'working':
+      return 'Working'
+    case 'waiting_for_user':
+      return 'Waiting for user'
+    case 'waiting_for_approval':
+      return 'Waiting for approval'
+    case 'finished':
+      return 'Finished'
+    case 'inactivity':
+      return 'Paused (inactivity)'
+    case 'user_request':
+      return 'Paused (user request)'
+    case 'usage_limit_exceeded':
+      return 'Usage limit exceeded'
+    case 'out_of_credits':
+      return 'Out of credits'
+    case 'out_of_quota':
+      return 'Out of quota'
+    case 'error':
+      return 'Error'
+    default:
+      return detail.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+  }
 }
 
 const TERMINAL_DEVIN_STATUSES = new Set(['finished', 'stopped', 'exit', 'error'])
@@ -1388,6 +1476,9 @@ function App() {
   const [isCreatingIssue, setIsCreatingIssue] = useState(false)
   const [jobs, setJobs] = useState<JobEntry[]>(() => loadPersistedJobs())
   const [isJobsOpen, setIsJobsOpen] = useState(false)
+  const [expandedJobId, setExpandedJobId] = useState<number | null>(null)
+  const [sessionDetailLookup, setSessionDetailLookup] = useState<Record<number, SessionDetailData>>({})
+  const [sessionDetailLoading, setSessionDetailLoading] = useState<Record<number, boolean>>({})
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_LAYOUT_MEDIA_QUERY).matches,
@@ -1468,6 +1559,7 @@ function App() {
     })()
   )
   const nextActionIdRef = useRef(1)
+  const sessionDetailPollingRef = useRef<number | null>(null)
   // Action tracking kept as no-ops; UI only shows session activity now.
   const mergeConflictPollingLookupRef = useRef<Record<string, true>>({})
   const syncGithubFeedRef = useRef<
@@ -2462,6 +2554,78 @@ function App() {
       }
     }
   }
+
+  const fetchSessionDetail = async (jobId: number, sessionId: string) => {
+    setSessionDetailLoading((prev) => ({ ...prev, [jobId]: true }))
+    try {
+      const data = await fetchDevinSessionById(sessionId)
+      const detail = parseSessionDetailData(data)
+      setSessionDetailLookup((prev) => ({ ...prev, [jobId]: detail }))
+    } catch {
+      // leave existing detail in place if present
+    } finally {
+      setSessionDetailLoading((prev) => ({ ...prev, [jobId]: false }))
+    }
+  }
+
+  const startSessionDetailPolling = (jobId: number, sessionId: string) => {
+    stopSessionDetailPolling()
+    void fetchSessionDetail(jobId, sessionId)
+    sessionDetailPollingRef.current = window.setInterval(() => {
+      void fetchSessionDetail(jobId, sessionId)
+    }, 5000)
+  }
+
+  const stopSessionDetailPolling = () => {
+    if (sessionDetailPollingRef.current !== null) {
+      window.clearInterval(sessionDetailPollingRef.current)
+      sessionDetailPollingRef.current = null
+    }
+  }
+
+  const handleToggleJobDetail = (job: JobEntry) => {
+    if (expandedJobId === job.id) {
+      setExpandedJobId(null)
+      stopSessionDetailPolling()
+      return
+    }
+
+    const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
+    if (!sessionId) {
+      return
+    }
+
+    setExpandedJobId(job.id)
+    startSessionDetailPolling(job.id, sessionId)
+  }
+
+  useEffect(() => {
+    if (expandedJobId === null) {
+      return
+    }
+
+    const job = jobs.find((j) => j.id === expandedJobId)
+    if (!job) {
+      stopSessionDetailPolling()
+      setExpandedJobId(null)
+      return
+    }
+
+    const detail = sessionDetailLookup[expandedJobId]
+    if (detail && isTerminalDevinStatus(detail.status)) {
+      stopSessionDetailPolling()
+    }
+
+    return () => {
+      // cleanup on unmount
+    }
+  }, [expandedJobId, sessionDetailLookup, jobs])
+
+  useEffect(() => {
+    return () => {
+      stopSessionDetailPolling()
+    }
+  }, [])
 
   const handleSyncGithubFeed = async (options?: { autoTriggered?: boolean }) => {
     if (isSyncingGithubFeed) {
@@ -5391,6 +5555,189 @@ opens a PR.
     </section>
   )
 
+  const renderSessionDetailPanel = (job: JobEntry) => {
+    const detail = sessionDetailLookup[job.id]
+    const isLoading = sessionDetailLoading[job.id] === true
+
+    if (!detail && isLoading) {
+      return (
+        <div className="session-detail-panel">
+          <div className="session-detail-loading">
+            <span className="spinner" aria-hidden="true" />
+            <span>Loading session details...</span>
+          </div>
+        </div>
+      )
+    }
+
+    if (!detail) {
+      return (
+        <div className="session-detail-panel">
+          <p className="session-detail-empty">Unable to load session details.</p>
+        </div>
+      )
+    }
+
+    const createdAtMs = detail.createdAt
+      ? detail.createdAt < 1_000_000_000_000
+        ? detail.createdAt * 1000
+        : detail.createdAt
+      : null
+    const updatedAtMs = detail.updatedAt
+      ? detail.updatedAt < 1_000_000_000_000
+        ? detail.updatedAt * 1000
+        : detail.updatedAt
+      : null
+
+    return (
+      <div className="session-detail-panel">
+        {detail.title ? (
+          <p className="session-detail-title">{detail.title}</p>
+        ) : null}
+
+        <div className="session-detail-status-row">
+          <span className={`job-devin-badge ${devinStatusToBadgeClass(detail.status)}`}>
+            {detail.status === 'running' ? (
+              <span className="badge-dot-pulse" aria-hidden="true" />
+            ) : null}
+            {formatDevinStatusLabel(detail.status)}
+          </span>
+          {detail.statusDetail ? (
+            <span className="session-detail-status-text">
+              {formatStatusDetailLabel(detail.statusDetail)}
+            </span>
+          ) : null}
+          {isLoading ? (
+            <span className="session-detail-refresh-indicator" aria-label="Refreshing">
+              <span className="spinner spinner-tiny" aria-hidden="true" />
+            </span>
+          ) : null}
+        </div>
+
+        <div className="session-detail-grid">
+          {createdAtMs ? (
+            <div className="session-detail-field">
+              <Clock size={11} />
+              <span className="session-detail-field-label">Created</span>
+              <span className="session-detail-field-value">{formatRelativeTime(createdAtMs)}</span>
+            </div>
+          ) : null}
+
+          {updatedAtMs ? (
+            <div className="session-detail-field">
+              <Clock size={11} />
+              <span className="session-detail-field-label">Updated</span>
+              <span className="session-detail-field-value">{formatRelativeTime(updatedAtMs)}</span>
+            </div>
+          ) : null}
+
+          {detail.acusConsumed !== null ? (
+            <div className="session-detail-field">
+              <Zap size={11} />
+              <span className="session-detail-field-label">ACUs</span>
+              <span className="session-detail-field-value">
+                {detail.acusConsumed.toFixed(1)}
+              </span>
+            </div>
+          ) : null}
+
+          {detail.isAdvanced ? (
+            <div className="session-detail-field">
+              <Zap size={11} />
+              <span className="session-detail-field-label">Mode</span>
+              <span className="session-detail-field-value">Advanced</span>
+            </div>
+          ) : null}
+        </div>
+
+        {detail.pullRequests.length > 0 ? (
+          <div className="session-detail-section">
+            <span className="session-detail-section-label">
+              <GitPullRequest size={11} />
+              Pull Requests
+            </span>
+            <ul className="session-detail-pr-list">
+              {detail.pullRequests.map((pr) => (
+                <li key={pr.prUrl}>
+                  <a
+                    href={pr.prUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="session-detail-pr-link"
+                  >
+                    <ExternalLink size={10} />
+                    <span>{pr.prUrl.replace(/^https?:\/\/github\.com\//, '')}</span>
+                  </a>
+                  {pr.prState ? (
+                    <span className={`session-detail-pr-state session-detail-pr-state-${pr.prState}`}>
+                      {pr.prState}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {detail.tags.length > 0 ? (
+          <div className="session-detail-section">
+            <span className="session-detail-section-label">
+              <Tag size={11} />
+              Tags
+            </span>
+            <div className="session-detail-tags">
+              {detail.tags.map((tag) => (
+                <span key={tag} className="session-detail-tag">{tag}</span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {detail.childSessionIds.length > 0 ? (
+          <div className="session-detail-section">
+            <span className="session-detail-section-label">
+              Child Sessions ({detail.childSessionIds.length})
+            </span>
+            <ul className="session-detail-child-list">
+              {detail.childSessionIds.slice(0, 10).map((childId) => (
+                <li key={childId}>
+                  <a
+                    href={`https://app.devin.ai/sessions/${childId}`}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="session-detail-child-link"
+                  >
+                    <ExternalLink size={10} />
+                    <span>{childId.length > 20 ? `${childId.slice(0, 20)}...` : childId}</span>
+                  </a>
+                </li>
+              ))}
+              {detail.childSessionIds.length > 10 ? (
+                <li className="session-detail-child-overflow">
+                  +{detail.childSessionIds.length - 10} more
+                </li>
+              ) : null}
+            </ul>
+          </div>
+        ) : null}
+
+        {detail.url ? (
+          <div className="session-detail-open-row">
+            <a
+              href={detail.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="job-session-link session-detail-open-link"
+            >
+              <ExternalLink size={12} />
+              Open in Devin
+            </a>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   const renderJobsSectionContent = (options?: { closeOnLinkClick?: boolean }) => {
     const linkClickHandler = options?.closeOnLinkClick ? () => setIsJobsOpen(false) : undefined
 
@@ -5405,73 +5752,113 @@ opens a PR.
           <p className="jobs-empty">No sessions yet.</p>
         ) : (
           <ul className="jobs-list">
-            {jobs.map((job) => (
-              <li key={job.id} className={`job-item status-${job.status}`}>
-                <div className="job-row">
-                  <p className="job-label">{job.label}</p>
-                  <span className={`job-status ${job.status}`}>{job.status}</span>
-                </div>
+            {jobs.map((job) => {
+              const hasSessionUrl = Boolean(job.sessionUrl)
+              const isExpanded = expandedJobId === job.id
 
-                {job.devinStatus ? (
-                  <div className="job-devin-status-row">
-                    <span className={`job-devin-badge ${devinStatusToBadgeClass(job.devinStatus)}`}>
-                      {job.devinStatus === 'running' ? (
-                        <span className="badge-dot-pulse" aria-hidden="true" />
+              return (
+                <li key={job.id} className={`job-item status-${job.status}${isExpanded ? ' job-item-expanded' : ''}`}>
+                  <div
+                    className={`job-row${hasSessionUrl ? ' job-row-clickable' : ''}`}
+                    onClick={hasSessionUrl ? () => handleToggleJobDetail(job) : undefined}
+                    role={hasSessionUrl ? 'button' : undefined}
+                    tabIndex={hasSessionUrl ? 0 : undefined}
+                    onKeyDown={
+                      hasSessionUrl
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              handleToggleJobDetail(job)
+                            }
+                          }
+                        : undefined
+                    }
+                  >
+                    <p className="job-label">{job.label}</p>
+                    <div className="job-row-right">
+                      <span className={`job-status ${job.status}`}>{job.status}</span>
+                      {hasSessionUrl ? (
+                        isExpanded ? <ChevronUp size={12} className="job-expand-icon" /> : <ChevronDown size={12} className="job-expand-icon" />
                       ) : null}
-                      {formatDevinStatusLabel(job.devinStatus)}
-                    </span>
-                    {job.statusDetail ? (
-                      <span className="job-status-detail">{job.statusDetail}</span>
-                    ) : null}
+                    </div>
                   </div>
-                ) : null}
 
-                <p className="job-target">{job.target}</p>
-                <p className="job-message">{job.message}</p>
+                  {job.devinStatus ? (
+                    <div className="job-devin-status-row">
+                      <span className={`job-devin-badge ${devinStatusToBadgeClass(job.devinStatus)}`}>
+                        {job.devinStatus === 'running' ? (
+                          <span className="badge-dot-pulse" aria-hidden="true" />
+                        ) : null}
+                        {formatDevinStatusLabel(job.devinStatus)}
+                      </span>
+                      {job.statusDetail ? (
+                        <span className="job-status-detail">{job.statusDetail}</span>
+                      ) : null}
+                    </div>
+                  ) : null}
 
-                <div className="job-meta-row">
-                  <span className="job-time">{formatRelativeTime(job.createdAt)}</span>
+                  <p className="job-target">{job.target}</p>
+                  <p className="job-message">{job.message}</p>
 
-                  <div className="job-meta-actions">
-                    {job.pullRequestUrl ? (
-                      <a
-                        href={job.pullRequestUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="job-session-link job-pr-link"
-                        onClick={linkClickHandler}
+                  <AnimatePresence initial={false}>
+                    {isExpanded ? (
+                      <motion.div
+                        key="detail"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: 'easeInOut' }}
+                        style={{ overflow: 'hidden' }}
                       >
-                        View PR
-                      </a>
+                        {renderSessionDetailPanel(job)}
+                      </motion.div>
                     ) : null}
+                  </AnimatePresence>
 
-                    {job.sessionUrl ? (
-                      <a
-                        href={job.sessionUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="job-session-link"
-                        onClick={linkClickHandler}
-                      >
-                        {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
-                      </a>
-                    ) : null}
+                  <div className="job-meta-row">
+                    <span className="job-time">{formatRelativeTime(job.createdAt)}</span>
 
-                    {job.status === 'failed' && job.retryable ? (
-                      <button
-                        type="button"
-                        className="fab-button secondary job-retry"
-                        onClick={() => {
-                          void handleRetryJob(job.id)
-                        }}
-                      >
-                        Retry
-                      </button>
-                    ) : null}
+                    <div className="job-meta-actions">
+                      {job.pullRequestUrl ? (
+                        <a
+                          href={job.pullRequestUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="job-session-link job-pr-link"
+                          onClick={linkClickHandler}
+                        >
+                          View PR
+                        </a>
+                      ) : null}
+
+                      {job.sessionUrl ? (
+                        <a
+                          href={job.sessionUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="job-session-link"
+                          onClick={linkClickHandler}
+                        >
+                          {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
+                        </a>
+                      ) : null}
+
+                      {job.status === 'failed' && job.retryable ? (
+                        <button
+                          type="button"
+                          className="fab-button secondary job-retry"
+                          onClick={() => {
+                            void handleRetryJob(job.id)
+                          }}
+                        >
+                          Retry
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         )}
       </>
