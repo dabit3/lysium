@@ -8,6 +8,7 @@ import {
   Settings,
   Activity,
   ArrowDown,
+  ArrowLeft,
   MessageSquarePlus,
   Play,
   Rocket,
@@ -17,6 +18,9 @@ import {
   List,
   CheckSquare,
   Square,
+  ExternalLink,
+  Clock,
+  GitPullRequest,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -1396,6 +1400,9 @@ function App() {
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_WIDE_LAYOUT_MEDIA_QUERY).matches,
   )
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
+  const [selectedDetailJobId, setSelectedDetailJobId] = useState<number | null>(null)
+  const [sessionDetailData, setSessionDetailData] = useState<DevinSessionPayload | null>(null)
+  const [isLoadingSessionDetail, setIsLoadingSessionDetail] = useState(false)
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
     const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
@@ -4437,6 +4444,79 @@ function App() {
     }
   }, [hasDevinSession])
 
+  const selectedDetailJob = selectedDetailJobId !== null
+    ? jobs.find((j) => j.id === selectedDetailJobId) ?? null
+    : null
+
+  const fetchSessionDetailRef = useRef<() => Promise<void>>(async () => {})
+  fetchSessionDetailRef.current = async () => {
+    if (!selectedDetailJob) return
+
+    const sessionId = toSessionIdFromSessionUrl(selectedDetailJob.sessionUrl)
+    if (!sessionId) return
+
+    try {
+      const data = await fetchDevinSessionById(sessionId)
+      setSessionDetailData(data)
+
+      const nextDevinStatus = typeof data.status === 'string' ? data.status : undefined
+      const nextStatusDetail =
+        typeof data.status_detail === 'string' && data.status_detail.trim().length > 0
+          ? data.status_detail.trim()
+          : undefined
+      updateJob(selectedDetailJob.id, { devinStatus: nextDevinStatus, statusDetail: nextStatusDetail })
+    } catch {
+      // silently continue
+    }
+  }
+
+  useEffect(() => {
+    if (selectedDetailJobId === null || !hasDevinSession) {
+      setSessionDetailData(null)
+      return
+    }
+
+    const job = jobs.find((j) => j.id === selectedDetailJobId)
+    if (!job) {
+      setSelectedDetailJobId(null)
+      return
+    }
+
+    const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
+    if (!sessionId) return
+
+    let cancelled = false
+    setIsLoadingSessionDetail(true)
+
+    fetchDevinSessionById(sessionId)
+      .then((data) => {
+        if (!cancelled) {
+          setSessionDetailData(data)
+          setIsLoadingSessionDetail(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIsLoadingSessionDetail(false)
+        }
+      })
+
+    const isTerminal = isTerminalDevinStatus(job.devinStatus)
+    if (isTerminal) {
+      return () => { cancelled = true }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void fetchSessionDetailRef.current()
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDetailJobId, hasDevinSession])
+
   useEffect(() => {
     if (!hasDevinSession || !hasDevinOrgId || !hasGithubOauthSession || !hasGithubScope) {
       hasAttemptedStartupSyncRef.current = false
@@ -5391,8 +5471,162 @@ opens a PR.
     </section>
   )
 
+  const renderSessionDetailView = (options?: { closeOnLinkClick?: boolean }) => {
+    if (!selectedDetailJob) return null
+
+    const linkClickHandler = options?.closeOnLinkClick ? () => {
+      setIsJobsOpen(false)
+      setSelectedDetailJobId(null)
+      setSessionDetailData(null)
+    } : undefined
+    const sessionId = toSessionIdFromSessionUrl(selectedDetailJob.sessionUrl)
+    const devinStatus = selectedDetailJob.devinStatus
+    const isLive = devinStatus !== undefined && !isTerminalDevinStatus(devinStatus)
+    const statusDetail = selectedDetailJob.statusDetail
+
+    const detailTitle =
+      sessionDetailData && typeof sessionDetailData.title === 'string' && sessionDetailData.title.trim().length > 0
+        ? sessionDetailData.title.trim()
+        : undefined
+
+    const detailCreatedAt =
+      sessionDetailData && typeof sessionDetailData.created_at === 'string'
+        ? sessionDetailData.created_at
+        : undefined
+
+    return (
+      <div className="session-detail-view">
+        <div className="session-detail-header">
+          <button
+            type="button"
+            className="session-detail-back"
+            onClick={() => {
+              setSelectedDetailJobId(null)
+              setSessionDetailData(null)
+            }}
+          >
+            <ArrowLeft size={14} />
+            <span>Sessions</span>
+          </button>
+          {isLive ? (
+            <span className="session-detail-live-indicator">
+              <span className="badge-dot-pulse" aria-hidden="true" />
+              Live
+            </span>
+          ) : null}
+        </div>
+
+        <div className="session-detail-body">
+          <div className="session-detail-title-row">
+            <h4 className="session-detail-label">{selectedDetailJob.label}</h4>
+            <span className={`job-status ${selectedDetailJob.status}`}>{selectedDetailJob.status}</span>
+          </div>
+
+          {detailTitle ? (
+            <p className="session-detail-title">{detailTitle}</p>
+          ) : null}
+
+          {devinStatus ? (
+            <div className="session-detail-status-row">
+              <span className={`job-devin-badge ${devinStatusToBadgeClass(devinStatus)}`}>
+                {devinStatus === 'running' ? (
+                  <span className="badge-dot-pulse" aria-hidden="true" />
+                ) : null}
+                {formatDevinStatusLabel(devinStatus)}
+              </span>
+              {statusDetail ? (
+                <span className="session-detail-status-text">{statusDetail}</span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {isLoadingSessionDetail ? (
+            <div className="session-detail-loading">
+              <RefreshCw size={14} className="session-detail-spinner" />
+              <span>Loading session details...</span>
+            </div>
+          ) : null}
+
+          <div className="session-detail-fields">
+            {sessionId ? (
+              <div className="session-detail-field">
+                <span className="session-detail-field-label">Session ID</span>
+                <span className="session-detail-field-value session-detail-mono">{sessionId}</span>
+              </div>
+            ) : null}
+
+            <div className="session-detail-field">
+              <span className="session-detail-field-label">Target</span>
+              <span className="session-detail-field-value">{selectedDetailJob.target}</span>
+            </div>
+
+            <div className="session-detail-field">
+              <span className="session-detail-field-label">Message</span>
+              <span className="session-detail-field-value">{selectedDetailJob.message}</span>
+            </div>
+
+            <div className="session-detail-field">
+              <span className="session-detail-field-label">Created</span>
+              <span className="session-detail-field-value">
+                <Clock size={12} />
+                {detailCreatedAt
+                  ? new Date(detailCreatedAt).toLocaleString()
+                  : formatRelativeTime(selectedDetailJob.createdAt)}
+              </span>
+            </div>
+          </div>
+
+          <div className="session-detail-actions">
+            {selectedDetailJob.sessionUrl ? (
+              <a
+                href={selectedDetailJob.sessionUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="job-session-link session-detail-action-link"
+                onClick={linkClickHandler}
+              >
+                <ExternalLink size={12} />
+                {selectedDetailJob.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
+              </a>
+            ) : null}
+
+            {selectedDetailJob.pullRequestUrl ? (
+              <a
+                href={selectedDetailJob.pullRequestUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="job-session-link job-pr-link session-detail-action-link"
+                onClick={linkClickHandler}
+              >
+                <GitPullRequest size={12} />
+                View PR
+              </a>
+            ) : null}
+
+            {selectedDetailJob.status === 'failed' && selectedDetailJob.retryable ? (
+              <button
+                type="button"
+                className="fab-button secondary job-retry"
+                onClick={() => {
+                  void handleRetryJob(selectedDetailJob.id)
+                }}
+              >
+                <RefreshCw size={12} />
+                Retry
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const renderJobsSectionContent = (options?: { closeOnLinkClick?: boolean }) => {
-    const linkClickHandler = options?.closeOnLinkClick ? () => setIsJobsOpen(false) : undefined
+    const linkClickHandler = options?.closeOnLinkClick ? () => {
+      setIsJobsOpen(false)
+      setSelectedDetailJobId(null)
+      setSessionDetailData(null)
+    } : undefined
 
     return (
       <>
@@ -5406,7 +5640,19 @@ opens a PR.
         ) : (
           <ul className="jobs-list">
             {jobs.map((job) => (
-              <li key={job.id} className={`job-item status-${job.status}`}>
+              <li
+                key={job.id}
+                className={`job-item status-${job.status}${job.sessionUrl ? ' job-item-clickable' : ''}`}
+                onClick={job.sessionUrl ? () => setSelectedDetailJobId(job.id) : undefined}
+                role={job.sessionUrl ? 'button' : undefined}
+                tabIndex={job.sessionUrl ? 0 : undefined}
+                onKeyDown={job.sessionUrl ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedDetailJobId(job.id)
+                  }
+                } : undefined}
+              >
                 <div className="job-row">
                   <p className="job-label">{job.label}</p>
                   <span className={`job-status ${job.status}`}>{job.status}</span>
@@ -5439,7 +5685,10 @@ opens a PR.
                         target="_blank"
                         rel="noreferrer noopener"
                         className="job-session-link job-pr-link"
-                        onClick={linkClickHandler}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          linkClickHandler?.()
+                        }}
                       >
                         View PR
                       </a>
@@ -5451,7 +5700,10 @@ opens a PR.
                         target="_blank"
                         rel="noreferrer noopener"
                         className="job-session-link"
-                        onClick={linkClickHandler}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          linkClickHandler?.()
+                        }}
                       >
                         {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
                       </a>
@@ -5461,7 +5713,8 @@ opens a PR.
                       <button
                         type="button"
                         className="fab-button secondary job-retry"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           void handleRetryJob(job.id)
                         }}
                       >
@@ -5480,7 +5733,11 @@ opens a PR.
 
   const renderActivityPanelViewContent = (options?: { closeOnLinkClick?: boolean }) => (
     <section className="jobs-drawer-section" aria-label="Sessions">
-      {renderJobsSectionContent(options)}
+      {selectedDetailJobId !== null ? (
+        renderSessionDetailView(options)
+      ) : (
+        renderJobsSectionContent(options)
+      )}
     </section>
   )
 
@@ -6804,7 +7061,11 @@ opens a PR.
             key="jobs-backdrop"
             className="drawer-backdrop"
             role="presentation"
-            onClick={() => setIsJobsOpen(false)}
+            onClick={() => {
+              setIsJobsOpen(false)
+              setSelectedDetailJobId(null)
+              setSessionDetailData(null)
+            }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -6833,7 +7094,11 @@ opens a PR.
                 <button
                   type="button"
                   className="jobs-close"
-                  onClick={() => setIsJobsOpen(false)}
+                  onClick={() => {
+                    setIsJobsOpen(false)
+                    setSelectedDetailJobId(null)
+                    setSessionDetailData(null)
+                  }}
                 >
                   Close
                 </button>
