@@ -4494,6 +4494,13 @@ function App() {
         if (!cancelled) {
           setSessionDetailData(data)
           setIsLoadingSessionDetail(false)
+
+          const nextDevinStatus = typeof data.status === 'string' ? data.status : undefined
+          const nextStatusDetail =
+            typeof data.status_detail === 'string' && data.status_detail.trim().length > 0
+              ? data.status_detail.trim()
+              : undefined
+          updateJob(job.id, { devinStatus: nextDevinStatus, statusDetail: nextStatusDetail })
         }
       })
       .catch(() => {
