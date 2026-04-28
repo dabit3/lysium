@@ -8,6 +8,7 @@ import {
   Settings,
   Activity,
   ArrowDown,
+  ArrowLeft,
   MessageSquarePlus,
   Play,
   Rocket,
@@ -17,6 +18,8 @@ import {
   List,
   CheckSquare,
   Square,
+  ExternalLink,
+  Clock,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
@@ -1396,6 +1399,9 @@ function App() {
     typeof window !== 'undefined' && window.matchMedia(DESKTOP_WIDE_LAYOUT_MEDIA_QUERY).matches,
   )
   const [isDesktopActivityOpen, setIsDesktopActivityOpen] = useState(false)
+  const [activeDetailJobId, setActiveDetailJobId] = useState<number | null>(null)
+  const [detailSessionData, setDetailSessionData] = useState<DevinSessionPayload | null>(null)
+  const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [startupIntroPhase, setStartupIntroPhase] = useState<'idle' | 'playing' | 'done'>('idle')
   const [startupIntroCycle, setStartupIntroCycle] = useState(0)
     const [colorTheme, setColorTheme] = useState<'dark' | 'light' | 'aurora'>(
@@ -1469,6 +1475,8 @@ function App() {
   )
   const nextActionIdRef = useRef(1)
   // Action tracking kept as no-ops; UI only shows session activity now.
+  const detailFetchIdRef = useRef(0)
+  const pollDetailSessionRef = useRef<() => Promise<void>>(async () => {})
   const mergeConflictPollingLookupRef = useRef<Record<string, true>>({})
   const syncGithubFeedRef = useRef<
     ((options?: { autoTriggered?: boolean }) => Promise<void>) | null
@@ -4227,6 +4235,7 @@ function App() {
     setAssessedIssueLookup({})
     setAssessedPrLookup({})
     setJobs([])
+    closeSessionDetail()
     setGithubSearchScope('')
 
     if (typeof window === 'undefined') {
@@ -4436,6 +4445,78 @@ function App() {
       window.clearInterval(intervalId)
     }
   }, [hasDevinSession])
+
+  const openSessionDetail = (jobId: number) => {
+    const job = jobs.find((j) => j.id === jobId)
+    if (!job) return
+    setActiveDetailJobId(jobId)
+    setDetailSessionData(null)
+
+    const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
+    if (!sessionId) return
+
+    const fetchId = ++detailFetchIdRef.current
+    setIsDetailLoading(true)
+    fetchDevinSessionById(sessionId)
+      .then((data) => {
+        if (detailFetchIdRef.current === fetchId) {
+          setDetailSessionData(data)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (detailFetchIdRef.current === fetchId) {
+          setIsDetailLoading(false)
+        }
+      })
+  }
+
+  const closeSessionDetail = () => {
+    detailFetchIdRef.current += 1
+    setActiveDetailJobId(null)
+    setDetailSessionData(null)
+    setIsDetailLoading(false)
+  }
+
+  const activeDetailJob = activeDetailJobId !== null
+    ? jobs.find((j) => j.id === activeDetailJobId)
+    : undefined
+  const isDetailTerminal = isTerminalDevinStatus(activeDetailJob?.devinStatus)
+
+  pollDetailSessionRef.current = async () => {
+    if (activeDetailJobId === null) return
+
+    const job = jobs.find((j) => j.id === activeDetailJobId)
+    if (!job) return
+
+    const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
+    if (!sessionId) return
+
+    try {
+      const data = await fetchDevinSessionById(sessionId)
+      setDetailSessionData(data)
+      const nextDevinStatus = typeof data.status === 'string' ? data.status : undefined
+      const nextStatusDetail =
+        typeof data.status_detail === 'string' && data.status_detail.trim().length > 0
+          ? data.status_detail.trim()
+          : undefined
+      updateJob(activeDetailJobId, { devinStatus: nextDevinStatus, statusDetail: nextStatusDetail })
+    } catch {
+      // silently continue
+    }
+  }
+
+  useEffect(() => {
+    if (activeDetailJobId === null || isDetailTerminal) return
+
+    const tick = () => {
+      void pollDetailSessionRef.current?.()
+    }
+
+    const intervalId = window.setInterval(tick, 5000)
+
+    return () => window.clearInterval(intervalId)
+  }, [activeDetailJobId, isDetailTerminal])
 
   useEffect(() => {
     if (!hasDevinSession || !hasDevinOrgId || !hasGithubOauthSession || !hasGithubScope) {
@@ -5391,7 +5472,141 @@ opens a PR.
     </section>
   )
 
+  const renderSessionDetailView = (options?: { closeOnLinkClick?: boolean }) => {
+    const job = activeDetailJobId !== null ? jobs.find((j) => j.id === activeDetailJobId) : null
+    if (!job) return null
+
+    const linkClickHandler = options?.closeOnLinkClick ? () => setIsJobsOpen(false) : undefined
+    const sessionId = toSessionIdFromSessionUrl(job.sessionUrl)
+    const displayStatus = job.devinStatus ?? job.status
+    const isRunning = displayStatus === 'running'
+    const elapsedMs = Date.now() - job.createdAt
+    const elapsedSeconds = Math.floor(elapsedMs / 1000)
+    const elapsedMinutes = Math.floor(elapsedSeconds / 60)
+    const elapsedHours = Math.floor(elapsedMinutes / 60)
+
+    const formatElapsed = () => {
+      if (elapsedHours > 0) {
+        return `${elapsedHours}h ${elapsedMinutes % 60}m`
+      }
+      if (elapsedMinutes > 0) {
+        return `${elapsedMinutes}m ${elapsedSeconds % 60}s`
+      }
+      return `${elapsedSeconds}s`
+    }
+
+    const statusDetail = detailSessionData?.status_detail ?? job.statusDetail
+    const prUrl = job.pullRequestUrl ??
+      (detailSessionData?.structured_output &&
+        typeof detailSessionData.structured_output === 'object'
+        ? (detailSessionData.structured_output as Record<string, unknown>).pull_request_url as string | undefined
+        : undefined)
+
+    return (
+      <div className="session-detail-view">
+        <button
+          type="button"
+          className="session-detail-back"
+          onClick={() => closeSessionDetail()}
+        >
+          <ArrowLeft size={14} />
+          All sessions
+        </button>
+
+        <div className="session-detail-header">
+          <h4 className="session-detail-title">{job.label}</h4>
+          {displayStatus ? (
+            <span className={`job-devin-badge ${devinStatusToBadgeClass(displayStatus)}`}>
+              {isRunning ? <span className="badge-dot-pulse" aria-hidden="true" /> : null}
+              {formatDevinStatusLabel(displayStatus)}
+            </span>
+          ) : null}
+        </div>
+
+        <p className="session-detail-target">{job.target}</p>
+
+        <div className="session-detail-meta">
+          <div className="session-detail-meta-item">
+            <Clock size={12} />
+            <span>{formatElapsed()} elapsed</span>
+          </div>
+          {sessionId ? (
+            <div className="session-detail-meta-item session-detail-session-id">
+              <span>ID: {sessionId.length > 20 ? `${sessionId.slice(0, 18)}...` : sessionId}</span>
+            </div>
+          ) : null}
+        </div>
+
+        {isDetailLoading ? (
+          <div className="session-detail-loading">
+            <span className="spinner" aria-hidden="true" />
+            <span>Loading session data...</span>
+          </div>
+        ) : null}
+
+        {statusDetail ? (
+          <div className="session-detail-status-section">
+            <span className="session-detail-section-label">Current activity</span>
+            <p className="session-detail-status-text">{statusDetail}</p>
+          </div>
+        ) : null}
+
+        <div className="session-detail-status-section">
+          <span className="session-detail-section-label">Message</span>
+          <p className="session-detail-message">{job.message}</p>
+        </div>
+
+        <div className="session-detail-links">
+          {prUrl ? (
+            <a
+              href={prUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="session-detail-link session-detail-link-pr"
+              onClick={linkClickHandler}
+            >
+              <Github size={13} />
+              View Pull Request
+              <ExternalLink size={11} />
+            </a>
+          ) : null}
+
+          {job.sessionUrl ? (
+            <a
+              href={job.sessionUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="session-detail-link"
+              onClick={linkClickHandler}
+            >
+              <Activity size={13} />
+              {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
+              <ExternalLink size={11} />
+            </a>
+          ) : null}
+
+          {job.status === 'failed' && job.retryable ? (
+            <button
+              type="button"
+              className="fab-button secondary session-detail-retry"
+              onClick={() => {
+                void handleRetryJob(job.id)
+              }}
+            >
+              <RefreshCw size={13} />
+              Retry
+            </button>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
   const renderJobsSectionContent = (options?: { closeOnLinkClick?: boolean }) => {
+    if (activeDetailJobId !== null) {
+      return renderSessionDetailView(options) ?? null
+    }
+
     const linkClickHandler = options?.closeOnLinkClick ? () => setIsJobsOpen(false) : undefined
 
     return (
@@ -5406,7 +5621,19 @@ opens a PR.
         ) : (
           <ul className="jobs-list">
             {jobs.map((job) => (
-              <li key={job.id} className={`job-item status-${job.status}`}>
+              <li
+                key={job.id}
+                className={`job-item status-${job.status}${job.sessionUrl ? ' has-detail' : ''}`}
+                onClick={job.sessionUrl ? () => openSessionDetail(job.id) : undefined}
+                role={job.sessionUrl ? 'button' : undefined}
+                tabIndex={job.sessionUrl ? 0 : undefined}
+                onKeyDown={job.sessionUrl ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    openSessionDetail(job.id)
+                  }
+                } : undefined}
+              >
                 <div className="job-row">
                   <p className="job-label">{job.label}</p>
                   <span className={`job-status ${job.status}`}>{job.status}</span>
@@ -5439,7 +5666,10 @@ opens a PR.
                         target="_blank"
                         rel="noreferrer noopener"
                         className="job-session-link job-pr-link"
-                        onClick={linkClickHandler}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          linkClickHandler?.()
+                        }}
                       >
                         View PR
                       </a>
@@ -5451,7 +5681,10 @@ opens a PR.
                         target="_blank"
                         rel="noreferrer noopener"
                         className="job-session-link"
-                        onClick={linkClickHandler}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          linkClickHandler?.()
+                        }}
                       >
                         {job.label === 'Review & Autofix' ? 'Open Devin Review' : 'Open Session'}
                       </a>
@@ -5461,7 +5694,8 @@ opens a PR.
                       <button
                         type="button"
                         className="fab-button secondary job-retry"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           void handleRetryJob(job.id)
                         }}
                       >
@@ -6804,7 +7038,7 @@ opens a PR.
             key="jobs-backdrop"
             className="drawer-backdrop"
             role="presentation"
-            onClick={() => setIsJobsOpen(false)}
+            onClick={() => { setIsJobsOpen(false); closeSessionDetail() }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -6833,7 +7067,7 @@ opens a PR.
                 <button
                   type="button"
                   className="jobs-close"
-                  onClick={() => setIsJobsOpen(false)}
+                  onClick={() => { setIsJobsOpen(false); closeSessionDetail() }}
                 >
                   Close
                 </button>
