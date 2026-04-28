@@ -4451,6 +4451,7 @@ function App() {
   const fetchSessionDetailRef = useRef<() => Promise<void>>(async () => {})
   fetchSessionDetailRef.current = async () => {
     if (!selectedDetailJob) return
+    if (isTerminalDevinStatus(selectedDetailJob.devinStatus)) return
 
     const sessionId = toSessionIdFromSessionUrl(selectedDetailJob.sessionUrl)
     if (!sessionId) return
