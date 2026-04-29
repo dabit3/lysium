@@ -5744,7 +5744,7 @@ opens a PR.
   const renderJobListVariant3 = (
     jobEntries: JobEntry[],
     listOptions?: { archived?: boolean },
-    linkClickHandler?: () => void,
+    _linkClickHandler?: () => void,
   ) => (
     <>
       <ul className="jobs-list">
@@ -5801,114 +5801,6 @@ opens a PR.
         })}
       </ul>
 
-      {/* Modal — rendered in-flow but visually overlaid via fixed positioning */}
-      {detailModalJob && jobEntries.some((j) => j.id === detailModalJob.id) ? (
-        <div
-          className="session-detail-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Session details: ${detailModalJob.label}`}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setDetailModalJobId(null)
-          }}
-        >
-          <div className="session-detail-modal">
-            <div className="session-detail-modal-header">
-              <div className="session-detail-modal-title-row">
-                <DevinLogo size={18} />
-                <h4 className="session-detail-modal-title">{detailModalJob.label}</h4>
-              </div>
-              <button
-                type="button"
-                className="session-detail-modal-close"
-                onClick={() => setDetailModalJobId(null)}
-                aria-label="Close details"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="session-detail-modal-body">
-              <div className="job-detail-row">
-                <span className="job-detail-key">Job status</span>
-                <span className={`job-status ${detailModalJob.status}`}>{detailModalJob.status}</span>
-              </div>
-
-              {detailModalJob.devinStatus ? (
-                <div className="job-detail-row">
-                  <span className="job-detail-key">Devin status</span>
-                  <span className={`job-devin-badge ${devinStatusToBadgeClass(detailModalJob.devinStatus)}`}>
-                    {detailModalJob.devinStatus === 'running' ? (
-                      <span className="badge-dot-pulse" aria-hidden="true" />
-                    ) : null}
-                    {formatDevinStatusLabel(detailModalJob.devinStatus)}
-                  </span>
-                </div>
-              ) : null}
-
-              {detailModalJob.statusDetail ? (
-                <div className="job-detail-row">
-                  <span className="job-detail-key">Status detail</span>
-                  <span className="job-detail-val">{detailModalJob.statusDetail}</span>
-                </div>
-              ) : null}
-
-              <div className="job-detail-row">
-                <span className="job-detail-key">Target</span>
-                <span className="job-detail-val job-detail-mono">{detailModalJob.target}</span>
-              </div>
-
-              {toSessionIdFromSessionUrl(detailModalJob.sessionUrl) ? (
-                <div className="job-detail-row">
-                  <span className="job-detail-key">Session ID</span>
-                  <span className="job-detail-val job-detail-mono">{toSessionIdFromSessionUrl(detailModalJob.sessionUrl)}</span>
-                </div>
-              ) : null}
-
-              {detailModalJob.sessionUrl ? (
-                <div className="job-detail-row">
-                  <span className="job-detail-key">Session URL</span>
-                  <a
-                    href={detailModalJob.sessionUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="job-detail-val job-detail-link job-detail-mono"
-                    onClick={linkClickHandler}
-                  >
-                    {detailModalJob.sessionUrl}
-                  </a>
-                </div>
-              ) : null}
-
-              {detailModalJob.pullRequestUrl ? (
-                <div className="job-detail-row">
-                  <span className="job-detail-key">Pull request</span>
-                  <a
-                    href={detailModalJob.pullRequestUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="job-detail-val job-detail-link"
-                    onClick={linkClickHandler}
-                  >
-                    {detailModalJob.pullRequestUrl}
-                  </a>
-                </div>
-              ) : null}
-
-              <div className="job-detail-row">
-                <span className="job-detail-key">Created</span>
-                <span className="job-detail-val job-detail-mono">{formatRelativeTime(detailModalJob.createdAt)}</span>
-              </div>
-
-              <p className="job-message job-message-detail">{detailModalJob.message}</p>
-            </div>
-
-            <div className="session-detail-modal-footer">
-              {renderJobActions(detailModalJob, listOptions?.archived === true, linkClickHandler)}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </>
   )
 
@@ -6287,7 +6179,7 @@ opens a PR.
                 </button>
                 <button
                   type="button"
-                  className={`desktop-nav-button ${showDesktopMainActivity ? 'is-active' : ''}`.trim()}
+                  className={`desktop-nav-button ${showDesktopMainActivity || showDesktopActivityRail ? 'is-active' : ''}`.trim()}
                   onClick={() => {
                     setIsSettingsOpen(false)
                     if (isDesktopWideLayout) {
@@ -7194,6 +7086,114 @@ opens a PR.
           ) : null}
         </div>
       </main>
+
+      {/* Variant 3 session detail modal — rendered at top level to avoid
+          will-change:transform on ancestor drawers breaking position:fixed */}
+      {detailModalJob && sessionDetailVariant === 3 ? (
+        <div
+          className="session-detail-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Session details: ${detailModalJob.label}`}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDetailModalJobId(null)
+          }}
+        >
+          <div className="session-detail-modal">
+            <div className="session-detail-modal-header">
+              <div className="session-detail-modal-title-row">
+                <DevinLogo size={18} />
+                <h4 className="session-detail-modal-title">{detailModalJob.label}</h4>
+              </div>
+              <button
+                type="button"
+                className="session-detail-modal-close"
+                onClick={() => setDetailModalJobId(null)}
+                aria-label="Close details"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="session-detail-modal-body">
+              <div className="job-detail-row">
+                <span className="job-detail-key">Job status</span>
+                <span className={`job-status ${detailModalJob.status}`}>{detailModalJob.status}</span>
+              </div>
+
+              {detailModalJob.devinStatus ? (
+                <div className="job-detail-row">
+                  <span className="job-detail-key">Devin status</span>
+                  <span className={`job-devin-badge ${devinStatusToBadgeClass(detailModalJob.devinStatus)}`}>
+                    {detailModalJob.devinStatus === 'running' ? (
+                      <span className="badge-dot-pulse" aria-hidden="true" />
+                    ) : null}
+                    {formatDevinStatusLabel(detailModalJob.devinStatus)}
+                  </span>
+                </div>
+              ) : null}
+
+              {detailModalJob.statusDetail ? (
+                <div className="job-detail-row">
+                  <span className="job-detail-key">Status detail</span>
+                  <span className="job-detail-val">{detailModalJob.statusDetail}</span>
+                </div>
+              ) : null}
+
+              <div className="job-detail-row">
+                <span className="job-detail-key">Target</span>
+                <span className="job-detail-val job-detail-mono">{detailModalJob.target}</span>
+              </div>
+
+              {toSessionIdFromSessionUrl(detailModalJob.sessionUrl) ? (
+                <div className="job-detail-row">
+                  <span className="job-detail-key">Session ID</span>
+                  <span className="job-detail-val job-detail-mono">{toSessionIdFromSessionUrl(detailModalJob.sessionUrl)}</span>
+                </div>
+              ) : null}
+
+              {detailModalJob.sessionUrl ? (
+                <div className="job-detail-row">
+                  <span className="job-detail-key">Session URL</span>
+                  <a
+                    href={detailModalJob.sessionUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="job-detail-val job-detail-link job-detail-mono"
+                  >
+                    {detailModalJob.sessionUrl}
+                  </a>
+                </div>
+              ) : null}
+
+              {detailModalJob.pullRequestUrl ? (
+                <div className="job-detail-row">
+                  <span className="job-detail-key">Pull request</span>
+                  <a
+                    href={detailModalJob.pullRequestUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="job-detail-val job-detail-link"
+                  >
+                    {detailModalJob.pullRequestUrl}
+                  </a>
+                </div>
+              ) : null}
+
+              <div className="job-detail-row">
+                <span className="job-detail-key">Created</span>
+                <span className="job-detail-val job-detail-mono">{formatRelativeTime(detailModalJob.createdAt)}</span>
+              </div>
+
+              <p className="job-message job-message-detail">{detailModalJob.message}</p>
+            </div>
+
+            <div className="session-detail-modal-footer">
+              {renderJobActions(detailModalJob, archivedJobs.some((j) => j.id === detailModalJob.id))}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <AnimatePresence>
         {isCommentModalOpen ? (
