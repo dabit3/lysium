@@ -5744,7 +5744,6 @@ opens a PR.
   const renderJobListVariant3 = (
     jobEntries: JobEntry[],
     listOptions?: { archived?: boolean },
-    _linkClickHandler?: () => void,
   ) => (
     <>
       <ul className="jobs-list">
@@ -5906,7 +5905,7 @@ opens a PR.
     ) => {
       if (sessionDetailVariant === 1) return renderJobListVariant1(jobEntries, listOptions, linkClickHandler)
       if (sessionDetailVariant === 2) return renderJobListVariant2(jobEntries, listOptions, linkClickHandler)
-      if (sessionDetailVariant === 3) return renderJobListVariant3(jobEntries, listOptions, linkClickHandler)
+      if (sessionDetailVariant === 3) return renderJobListVariant3(jobEntries, listOptions)
       return renderJobListVariant4(jobEntries, listOptions, linkClickHandler)
     }
 
