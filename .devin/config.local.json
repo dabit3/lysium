@@ -1,19 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Exec(npm run)",
-      "Exec(git status)",
-      "Exec(git diff)",
       "Exec(git)",
-      "Exec(npm)",
-      "Exec(mkdir)",
-      "Exec(node)",
-      "Exec(python3)",
-      "Exec(curl)",
-      "Exec(npx tsc)",
-      "Exec(sed)",
-      "Exec(cat)",
-      "Exec(/Users/naderdabit/.local/bin/devin-insiders)"
+      "Exec(test)",
+      "Exec(find)",
+      "Exec(sed)"
     ]
   }
 }
