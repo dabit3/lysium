@@ -30,15 +30,24 @@ const cfg = () => ({
 
 const isConfigured = () => {
   const { clientId, clientSecret, redirectUri } = cfg()
-  return clientId && clientSecret && redirectUri && process.env.GITHUB_OAUTH_COOKIE_SECRET
+  return Boolean(clientId && clientSecret && redirectUri && process.env.GITHUB_OAUTH_COOKIE_SECRET)
+}
+
+// Restrict redirect error params to known safe slugs so upstream error
+// details never leak into the URL (browser history, referrer logs).
+const sanitizeErrorCode = (error) => {
+  const value = typeof error === 'string' ? error.trim().toLowerCase() : ''
+  return /^[a-z0-9_-]{1,64}$/.test(value) ? value : 'oauth_failed'
 }
 
 const successUrl = (error) => {
   const base = cfg().successRedirectUrl || 'https://your-app.vercel.app/'
   const url = new URL(base)
-  if (error) url.searchParams.set('github_oauth_error', error)
+  if (error) url.searchParams.set('github_oauth_error', sanitizeErrorCode(error))
   return url.toString()
 }
+
+const UPSTREAM_TIMEOUT_MS = 15_000
 
 const exchangeCode = async (code, state) => {
   const { clientId, clientSecret, redirectUri } = cfg()
@@ -46,6 +55,7 @@ const exchangeCode = async (code, state) => {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'lysium-github-oauth-server' },
     body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code, state, redirect_uri: redirectUri }),
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   })
   const data = await res.json()
   if (data.error) throw new Error(data.error_description || data.error)
@@ -56,6 +66,7 @@ const exchangeCode = async (code, state) => {
 const fetchUserInfo = async (token) => {
   const res = await fetch('https://api.github.com/user', {
     headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'lysium-github-oauth-server' },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   })
   if (!res.ok) return { login: null, userId: null }
   const data = await res.json()

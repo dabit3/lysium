@@ -21,7 +21,7 @@ const getSession = (req) => {
 
 const readBody = (req) =>
   new Promise((resolve, reject) => {
-    let data = ''
+    const chunks = []
     let size = 0
     req.on('data', (chunk) => {
       size += chunk.length
@@ -30,10 +30,14 @@ const readBody = (req) =>
         reject(new Error('Body too large'))
         return
       }
-      data += chunk
+      chunks.push(chunk)
     })
     req.on('end', () => {
-      try { resolve(JSON.parse(data)) } catch { reject(new Error('Invalid JSON')) }
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+      } catch {
+        reject(new Error('Invalid JSON'))
+      }
     })
     req.on('error', reject)
   })
@@ -110,9 +114,18 @@ export default async function handler(req, res) {
       try {
         const check = await fetch(endpoint, {
           headers: { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'lysium' },
+          signal: AbortSignal.timeout(10_000),
         })
         if (check.status === 401 || check.status === 403) {
           res.status(401).json({ error: 'Invalid Devin API key.' })
+          return
+        }
+        if (check.status === 404) {
+          res.status(400).json({ error: 'Devin organization not found. Check the org ID.' })
+          return
+        }
+        if (check.status >= 500) {
+          res.status(502).json({ error: 'Devin API is unavailable. Try again shortly.' })
           return
         }
       } catch {

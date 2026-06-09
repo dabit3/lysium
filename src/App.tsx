@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import './App.css'
 
@@ -1357,6 +1357,92 @@ const getSwipeToast = (
   return `PR #${card.id} closed without merge.`
 }
 
+const parseDevinError = async (response: Response) => {
+  const fallback = `${response.status} ${response.statusText}`.trim()
+  const raw = await response.text()
+
+  if (!raw) {
+    return fallback
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const messageCandidate =
+      typeof parsed.error === 'string'
+        ? parsed.error
+        : typeof parsed.message === 'string'
+          ? parsed.message
+          : typeof parsed.detail === 'string'
+            ? parsed.detail
+            : null
+
+    return messageCandidate ? `${fallback}: ${messageCandidate}` : `${fallback}: ${raw}`
+  } catch {
+    return `${fallback}: ${raw}`
+  }
+}
+
+const getGithubFeedAuthIssue = (tokenCandidate: string) => {
+  if (!HAS_GITHUB_OAUTH_CONFIG) {
+    return 'Configure GitHub OAuth URLs to enable feed sync.'
+  }
+
+  const token = tokenCandidate.trim()
+  if (!token) {
+    return 'Connect GitHub OAuth to sync issues and PRs directly from GitHub Search API.'
+  }
+
+  return null
+}
+
+const fetchGithubPullRequestFiles = async (
+  repoPath: string,
+  pullNumber: number,
+  githubAccessToken: string,
+) => {
+  const token = githubAccessToken.trim()
+  if (!token) {
+    throw new Error('Missing GitHub OAuth token.')
+  }
+
+  const normalizedRepoPath = normalizeRepoPath(repoPath)
+  const [owner, repo] = normalizedRepoPath.split('/')
+  if (!owner || !repo) {
+    throw new Error(`Invalid repository path: ${repoPath}`)
+  }
+
+  const files: GithubPullRequestFile[] = []
+  const perPage = 100
+  const maxPages = 3
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/files?per_page=${perPage}&page=${page}`,
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(await parseDevinError(response))
+    }
+
+    const payload = (await response.json()) as GithubPullRequestFile[]
+    const pageFiles = Array.isArray(payload) ? payload : []
+    files.push(...pageFiles)
+
+    if (pageFiles.length < perPage) {
+      break
+    }
+  }
+
+  return files
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('code')
   const [issues, setIssues] = useState<IssueCard[]>([])
@@ -1421,7 +1507,6 @@ function App() {
   const [hasVerifiedDevinConnection, setHasVerifiedDevinConnection] =
     useState(false)
   const [isSyncingGithubFeed, setIsSyncingGithubFeed] = useState(false)
-  const [, setLastGithubSyncSummary] = useState<string | null>(null)
   const [hasSyncedGithubFeed, setHasSyncedGithubFeed] = useState(false)
   const [pullRequestContentView, setPullRequestContentView] = useState<'summary' | 'code'>(
     'summary',
@@ -1443,9 +1528,6 @@ function App() {
   const [mergeConflictLookup, setMergeConflictLookup] = useState<Record<string, number>>(
     {},
   )
-  const [mergeConflictCheckLookup, setMergeConflictCheckLookup] = useState<
-    Record<string, number>
-  >({})
   const [mergeConflictResolutionLookup, setMergeConflictResolutionLookup] = useState<
     Record<string, 'running' | 'resolved'>
   >({})
@@ -1470,9 +1552,12 @@ function App() {
   const nextActionIdRef = useRef(1)
   // Action tracking kept as no-ops; UI only shows session activity now.
   const mergeConflictPollingLookupRef = useRef<Record<string, true>>({})
+  const mergeConflictCheckLookupRef = useRef<Record<string, number>>({})
+  const pullRequestCodeRequestLookupRef = useRef<Record<string, true>>({})
   const syncGithubFeedRef = useRef<
     ((options?: { autoTriggered?: boolean }) => Promise<void>) | null
   >(null)
+  const syncGithubFeedInFlightRef = useRef(false)
   const hasAttemptedStartupSyncRef = useRef(false)
   const prefersReducedMotion = useReducedMotion()
 
@@ -1637,20 +1722,23 @@ function App() {
     }
   }, [prefersReducedMotion, shouldShowCredentialSetup])
 
-  const showToast = (message: string, onUndo?: () => void, timeoutMs?: number) => {
-    setToastMessage(message)
-    setToastUndoCallback(() => onUndo ?? null)
+  const showToast = useCallback(
+    (message: string, onUndo?: () => void, timeoutMs?: number) => {
+      setToastMessage(message)
+      setToastUndoCallback(() => onUndo ?? null)
 
-    if (toastTimeoutRef.current) {
-      window.clearTimeout(toastTimeoutRef.current)
-    }
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current)
+      }
 
-    const resolvedTimeoutMs = onUndo ? timeoutMs ?? 4000 : timeoutMs ?? 1250
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToastMessage(null)
-      setToastUndoCallback(null)
-    }, resolvedTimeoutMs)
-  }
+      const resolvedTimeoutMs = onUndo ? timeoutMs ?? 4000 : timeoutMs ?? 1250
+      toastTimeoutRef.current = window.setTimeout(() => {
+        setToastMessage(null)
+        setToastUndoCallback(null)
+      }, resolvedTimeoutMs)
+    },
+    [],
+  )
 
   const updateDragOffset = (nextOffset: { x: number; y: number }) => {
     dragOffsetRef.current = nextOffset
@@ -1808,19 +1896,6 @@ function App() {
     return null
   }
 
-  const getGithubFeedAuthIssue = (tokenCandidate: string) => {
-    if (!HAS_GITHUB_OAUTH_CONFIG) {
-      return 'Configure GitHub OAuth URLs to enable feed sync.'
-    }
-
-    const token = tokenCandidate.trim()
-    if (!token) {
-      return 'Connect GitHub OAuth to sync issues and PRs directly from GitHub Search API.'
-    }
-
-    return null
-  }
-
   const buildDefaultDevinSessionsCollectionEndpoint = () =>
     `${DEVIN_PROXY_BASE_URL}/organizations/sessions`
 
@@ -1833,32 +1908,7 @@ function App() {
     return `${DEVIN_PROXY_BASE_URL}/organizations/${encodeURIComponent(trimmedOrgId)}/sessions`
   }
 
-  const parseDevinError = async (response: Response) => {
-    const fallback = `${response.status} ${response.statusText}`.trim()
-    const raw = await response.text()
-
-    if (!raw) {
-      return fallback
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as Record<string, unknown>
-      const messageCandidate =
-        typeof parsed.error === 'string'
-          ? parsed.error
-          : typeof parsed.message === 'string'
-            ? parsed.message
-            : typeof parsed.detail === 'string'
-              ? parsed.detail
-              : null
-
-      return messageCandidate ? `${fallback}: ${messageCandidate}` : `${fallback}: ${raw}`
-    } catch {
-      return `${fallback}: ${raw}`
-    }
-  }
-
-  const refreshGithubOauthSessionToken = async (options?: { silent?: boolean }) => {
+  const refreshGithubOauthSessionToken = useCallback(async (options?: { silent?: boolean }) => {
     if (!HAS_GITHUB_OAUTH_CONFIG) {
       setHasGithubOauthSession(false)
       setGithubOauthLogin(null)
@@ -1896,8 +1946,10 @@ function App() {
 
       setHasGithubOauthSession(true)
       setGithubOauthLogin(login)
-      if (login && githubSearchScope.trim().length === 0) {
-        setGithubSearchScope(`user:${login}`)
+      if (login) {
+        setGithubSearchScope((previous) =>
+          previous.trim().length === 0 ? `user:${login}` : previous,
+        )
       }
       return token
     } catch (error) {
@@ -1908,7 +1960,9 @@ function App() {
       }
       return ''
     }
-  }
+  }, [showToast])
+  const refreshGithubOauthSessionTokenRef = useRef(refreshGithubOauthSessionToken)
+  refreshGithubOauthSessionTokenRef.current = refreshGithubOauthSessionToken
 
   const handleStartGithubOauth = () => {
     if (!HAS_GITHUB_OAUTH_CONFIG) {
@@ -1948,10 +2002,10 @@ function App() {
     setPullRequests([])
     setPullRequestCodeLookup({})
     setMergeConflictLookup({})
-    setMergeConflictCheckLookup({})
     setMergeConflictResolutionLookup({})
     mergeConflictPollingLookupRef.current = {}
-    setLastGithubSyncSummary(null)
+    mergeConflictCheckLookupRef.current = {}
+    pullRequestCodeRequestLookupRef.current = {}
     setIsDesktopActivityOpen(false)
     hasAttemptedStartupSyncRef.current = false
   }
@@ -2000,13 +2054,16 @@ function App() {
     }
   }
 
-  const resolveGithubAccessToken = async (options?: { silent?: boolean }) => {
-    if (!HAS_GITHUB_OAUTH_CONFIG) {
-      return ''
-    }
+  const resolveGithubAccessToken = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!HAS_GITHUB_OAUTH_CONFIG) {
+        return ''
+      }
 
-    return refreshGithubOauthSessionToken({ silent: options?.silent ?? true })
-  }
+      return refreshGithubOauthSessionToken({ silent: options?.silent ?? true })
+    },
+    [refreshGithubOauthSessionToken],
+  )
 
   const fetchGithubSearchItems = async (
     kind: 'issues' | 'pullRequests',
@@ -2068,54 +2125,6 @@ function App() {
     }
 
     return collected
-  }
-
-  const fetchGithubPullRequestFiles = async (
-    repoPath: string,
-    pullNumber: number,
-    githubAccessToken: string,
-  ) => {
-    const token = githubAccessToken.trim()
-    if (!token) {
-      throw new Error('Missing GitHub OAuth token.')
-    }
-
-    const normalizedRepoPath = normalizeRepoPath(repoPath)
-    const [owner, repo] = normalizedRepoPath.split('/')
-    if (!owner || !repo) {
-      throw new Error(`Invalid repository path: ${repoPath}`)
-    }
-
-    const files: GithubPullRequestFile[] = []
-    const perPage = 100
-    const maxPages = 3
-
-    for (let page = 1; page <= maxPages; page += 1) {
-      const response = await fetch(
-        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/files?per_page=${perPage}&page=${page}`,
-        {
-          headers: {
-            Accept: 'application/vnd.github+json',
-            Authorization: `Bearer ${token}`,
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
-        },
-      )
-
-      if (!response.ok) {
-        throw new Error(await parseDevinError(response))
-      }
-
-      const payload = (await response.json()) as GithubPullRequestFile[]
-      const pageFiles = Array.isArray(payload) ? payload : []
-      files.push(...pageFiles)
-
-      if (pageFiles.length < perPage) {
-        break
-      }
-    }
-
-    return files
   }
 
   const closeGithubIssue = async (repoPath: string, issueNumber: number) => {
@@ -2464,79 +2473,73 @@ function App() {
   }
 
   const handleSyncGithubFeed = async (options?: { autoTriggered?: boolean }) => {
-    if (isSyncingGithubFeed) {
+    if (syncGithubFeedInFlightRef.current) {
       return
     }
 
+    syncGithubFeedInFlightRef.current = true
     const isAutoTriggered = options?.autoTriggered === true
     if (isAutoTriggered) {
       setIsSyncingGithubFeed(true)
-      setLastGithubSyncSummary(null)
-    }
-
-    const githubAccessToken = await resolveGithubAccessToken({ silent: true })
-    const authIssue = getGithubFeedAuthIssue(githubAccessToken)
-    if (authIssue) {
-      if (!isAutoTriggered) {
-        showToast(authIssue)
-      } else {
-        setIsSyncingGithubFeed(false)
-      }
-      return
-    }
-
-    if (!isAutoTriggered) {
-      setIsSyncingGithubFeed(true)
-      setLastGithubSyncSummary(null)
-    }
-    const actionId = addAction('Sync GitHub triage feed', 'pending')
-
-    if (!isAutoTriggered) {
-      showToast('Syncing GitHub issues and pull requests from GitHub Search API...')
     }
 
     try {
-      const [issueItems, pullRequestItems] = await Promise.all([
-        fetchGithubSearchItems('issues', githubAccessToken),
-        fetchGithubSearchItems('pullRequests', githubAccessToken),
-      ])
-
-      const syncedIssues = issueItems
-        .map(mapIssueFromGithubSearchItem)
-        .filter((item): item is IssueCard => item !== null)
-      const syncedPullRequests = pullRequestItems
-        .map(mapPullRequestFromGithubSearchItem)
-        .filter((item): item is PullRequestCard => item !== null)
-
-      setIssues(roundRobinByRepo(syncedIssues))
-      setPullRequests(syncedPullRequests)
-      setPullRequestCodeLookup({})
-      setMergeConflictLookup({})
-      setMergeConflictCheckLookup({})
-      setMergeConflictResolutionLookup({})
-      mergeConflictPollingLookupRef.current = {}
-
-      const scopeLabel = normalizeGithubScopeQualifier(githubSearchScope)
-      const summaryCore = `${syncedIssues.length} issues • ${syncedPullRequests.length} PRs`
-      const summary = scopeLabel ? `${summaryCore} (${scopeLabel})` : summaryCore
-      setLastGithubSyncSummary(summary)
-      setHasSyncedGithubFeed(true)
-      if (!isAutoTriggered) {
-        setIsSettingsOpen(false)
+      const githubAccessToken = await resolveGithubAccessToken({ silent: true })
+      const authIssue = getGithubFeedAuthIssue(githubAccessToken)
+      if (authIssue) {
+        if (!isAutoTriggered) {
+          showToast(authIssue)
+        }
+        return
       }
 
-      updateAction(actionId, { outcome: 'success' })
-
-
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to sync GitHub feed.'
-      setLastGithubSyncSummary(`Sync failed: ${message}`)
-      updateAction(actionId, { outcome: 'failed' })
       if (!isAutoTriggered) {
-        showToast(`GitHub sync failed: ${message}`)
+        setIsSyncingGithubFeed(true)
+      }
+      const actionId = addAction('Sync GitHub triage feed', 'pending')
+
+      if (!isAutoTriggered) {
+        showToast('Syncing GitHub issues and pull requests from GitHub Search API...')
+      }
+
+      try {
+        const [issueItems, pullRequestItems] = await Promise.all([
+          fetchGithubSearchItems('issues', githubAccessToken),
+          fetchGithubSearchItems('pullRequests', githubAccessToken),
+        ])
+
+        const syncedIssues = issueItems
+          .map(mapIssueFromGithubSearchItem)
+          .filter((item): item is IssueCard => item !== null)
+        const syncedPullRequests = pullRequestItems
+          .map(mapPullRequestFromGithubSearchItem)
+          .filter((item): item is PullRequestCard => item !== null)
+
+        setIssues(roundRobinByRepo(syncedIssues))
+        setPullRequests(syncedPullRequests)
+        setPullRequestCodeLookup({})
+        setMergeConflictLookup({})
+        setMergeConflictResolutionLookup({})
+        mergeConflictPollingLookupRef.current = {}
+        mergeConflictCheckLookupRef.current = {}
+        pullRequestCodeRequestLookupRef.current = {}
+
+        setHasSyncedGithubFeed(true)
+        if (!isAutoTriggered) {
+          setIsSettingsOpen(false)
+        }
+
+        updateAction(actionId, { outcome: 'success' })
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unable to sync GitHub feed.'
+        updateAction(actionId, { outcome: 'failed' })
+        if (!isAutoTriggered) {
+          showToast(`GitHub sync failed: ${message}`)
+        }
       }
     } finally {
+      syncGithubFeedInFlightRef.current = false
       setIsSyncingGithubFeed(false)
     }
   }
@@ -2719,15 +2722,7 @@ function App() {
             delete next[pullRequestKey]
             return next
           })
-          setMergeConflictCheckLookup((previous) => {
-            if (previous[pullRequestKey] === undefined) {
-              return previous
-            }
-
-            const next = { ...previous }
-            delete next[pullRequestKey]
-            return next
-          })
+          delete mergeConflictCheckLookupRef.current[pullRequestKey]
         }
 
         updateJob(jobId, {
@@ -4444,7 +4439,7 @@ function App() {
   }, [hasDevinSession, hasDevinOrgId, hasGithubOauthSession, hasGithubScope])
 
   useEffect(() => {
-    refreshGithubOauthSessionToken({ silent: true }).finally(() =>
+    refreshGithubOauthSessionTokenRef.current({ silent: true }).finally(() =>
       setIsCheckingGithubOauthSession(false),
     )
 
@@ -4530,6 +4525,34 @@ function App() {
   ])
 
   useEffect(() => {
+    if (!isCommentModalOpen && !isCreateIssueModalOpen && !isSettingsOpen && !isJobsOpen) {
+      return
+    }
+
+    const handleEscapeKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
+
+      event.preventDefault()
+      if (isCommentModalOpen) {
+        setIsCommentModalOpen(false)
+      } else if (isCreateIssueModalOpen) {
+        setIsCreateIssueModalOpen(false)
+      } else if (isSettingsOpen) {
+        setIsSettingsOpen(false)
+      } else {
+        setIsJobsOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleEscapeKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleEscapeKeyDown)
+    }
+  }, [isCommentModalOpen, isCreateIssueModalOpen, isSettingsOpen, isJobsOpen])
+
+  useEffect(() => {
     if (filteredRepoOptions.length === 0) {
       setSelectedRepo('')
       return
@@ -4544,30 +4567,22 @@ function App() {
     setPullRequestContentView('summary')
   }, [activePullRequestKey])
 
-  useEffect(() => {
-    if (activeTab !== 'pullRequests' || !activePr || !hasGithubOauthSession) {
-      return
-    }
+  const loadPullRequestCode = useCallback(
+    async (pullRequest: PullRequestCard) => {
+      const pullRequestKey = toIssueAssessmentKey(pullRequest)
+      if (!pullRequestKey || pullRequestCodeRequestLookupRef.current[pullRequestKey]) {
+        return
+      }
 
-    const pullRequestKey = toIssueAssessmentKey(activePr)
-    if (!pullRequestKey) {
-      return
-    }
+      pullRequestCodeRequestLookupRef.current[pullRequestKey] = true
+      setPullRequestCodeLookup((previous) => ({
+        ...previous,
+        [pullRequestKey]: {
+          status: 'loading',
+          lines: [],
+        },
+      }))
 
-    if (pullRequestCodeLookup[pullRequestKey] !== undefined) {
-      return
-    }
-
-    let isCancelled = false
-    setPullRequestCodeLookup((previous) => ({
-      ...previous,
-      [pullRequestKey]: {
-        status: 'loading',
-        lines: [],
-      },
-    }))
-
-    void (async () => {
       try {
         const githubAccessToken = await resolveGithubAccessToken({ silent: true })
         const authIssue = getGithubFeedAuthIssue(githubAccessToken)
@@ -4576,27 +4591,19 @@ function App() {
         }
 
         const files = await fetchGithubPullRequestFiles(
-          activePr.repo,
-          activePr.id,
+          pullRequest.repo,
+          pullRequest.id,
           githubAccessToken,
         )
-
-        if (isCancelled) {
-          return
-        }
 
         setPullRequestCodeLookup((previous) => ({
           ...previous,
           [pullRequestKey]: {
             status: 'ready',
-            lines: toPullRequestCodeLines(files, activePr.id),
+            lines: toPullRequestCodeLines(files, pullRequest.id),
           },
         }))
       } catch (error) {
-        if (isCancelled) {
-          return
-        }
-
         const message =
           error instanceof Error ? error.message : 'Unable to load pull request code.'
         setPullRequestCodeLookup((previous) => ({
@@ -4607,16 +4614,17 @@ function App() {
           },
         }))
       }
-    })()
+    },
+    [resolveGithubAccessToken],
+  )
 
-    return () => {
-      isCancelled = true
+  useEffect(() => {
+    if (activeTab !== 'pullRequests' || !activePr || !hasGithubOauthSession) {
+      return
     }
-  }, [
-    activePr,
-    activeTab,
-    hasGithubOauthSession,
-  ])
+
+    void loadPullRequestCode(activePr)
+  }, [activePr, activeTab, hasGithubOauthSession, loadPullRequestCode])
 
   useEffect(() => {
     return () => {
@@ -4666,35 +4674,15 @@ function App() {
     }
   }, [assessedPrLookup])
 
-  useEffect(() => {
-    if (activeTab !== 'pullRequests' || !activePr) {
-      return
-    }
+  const checkPullRequestForMergeConflict = useCallback(
+    async (pullRequest: PullRequestCard) => {
+      const pullRequestKey = toIssueAssessmentKey(pullRequest)
+      if (!pullRequestKey || mergeConflictCheckLookupRef.current[pullRequestKey] !== undefined) {
+        return
+      }
 
-    if (!HAS_GITHUB_OAUTH_CONFIG || !hasGithubOauthSession) {
-      return
-    }
+      mergeConflictCheckLookupRef.current[pullRequestKey] = Date.now()
 
-    const pullRequestKey = toIssueAssessmentKey(activePr)
-    if (!pullRequestKey) {
-      return
-    }
-
-    if (mergeConflictLookup[pullRequestKey] !== undefined) {
-      return
-    }
-
-    if (mergeConflictCheckLookup[pullRequestKey] !== undefined) {
-      return
-    }
-
-    let isCancelled = false
-    setMergeConflictCheckLookup((previous) => ({
-      ...previous,
-      [pullRequestKey]: Date.now(),
-    }))
-
-    void (async () => {
       try {
         const githubAccessToken = await resolveGithubAccessToken({ silent: true })
         const authIssue = getGithubFeedAuthIssue(githubAccessToken)
@@ -4703,12 +4691,12 @@ function App() {
         }
 
         const hasMergeConflict = await detectGithubPullRequestMergeConflict(
-          activePr.repo,
-          activePr.id,
+          pullRequest.repo,
+          pullRequest.id,
           githubAccessToken,
         )
 
-        if (isCancelled || !hasMergeConflict) {
+        if (!hasMergeConflict) {
           return
         }
 
@@ -4725,17 +4713,31 @@ function App() {
       } catch {
         // Ignore proactive merge conflict detection failures to avoid noisy toasts.
       }
-    })()
+    },
+    [resolveGithubAccessToken],
+  )
 
-    return () => {
-      isCancelled = true
+  useEffect(() => {
+    if (activeTab !== 'pullRequests' || !activePr) {
+      return
     }
+
+    if (!HAS_GITHUB_OAUTH_CONFIG || !hasGithubOauthSession) {
+      return
+    }
+
+    const pullRequestKey = toIssueAssessmentKey(activePr)
+    if (!pullRequestKey || mergeConflictLookup[pullRequestKey] !== undefined) {
+      return
+    }
+
+    void checkPullRequestForMergeConflict(activePr)
   }, [
     activePr,
     activeTab,
     hasGithubOauthSession,
-    mergeConflictCheckLookup,
     mergeConflictLookup,
+    checkPullRequestForMergeConflict,
   ])
 
   const swipeOutDistance =
@@ -5590,6 +5592,7 @@ opens a PR.
                 type="button"
                 className={`jobs-button ${runningJobsCount > 0 ? 'has-running-jobs' : ''}`.trim()}
                 onClick={() => setIsJobsOpen(true)}
+                aria-label={`View session activity (${runningJobsCount} running)`}
               >
                 <Activity size={14} />
                 <span className="jobs-count-badge">{runningJobsCount}</span>
@@ -6046,6 +6049,7 @@ opens a PR.
                       onClick={() => { if (cardKey.length > 0) toggleBulkSelect(cardKey) }}
                       role="checkbox"
                       aria-checked={isSelected}
+                      aria-label={`${card.repo}#${card.id} — ${card.title}`}
                       tabIndex={0}
                       onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (cardKey.length > 0) toggleBulkSelect(cardKey) } }}
                     >
@@ -6575,6 +6579,7 @@ opens a PR.
                 value={commentBody}
                 onChange={(event) => setCommentBody(event.target.value)}
                 placeholder="Write a clear review comment..."
+                aria-label="Comment body"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -6655,6 +6660,7 @@ opens a PR.
                   setCreateIssueRepo(nextQuery)
                 }}
                 placeholder="Search repository (owner/repo)"
+                aria-label="Repository"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -6691,6 +6697,7 @@ opens a PR.
                 value={createIssueTitle}
                 onChange={(event) => setCreateIssueTitle(event.target.value)}
                 placeholder="Issue title"
+                aria-label="Issue title"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -6700,6 +6707,7 @@ opens a PR.
                 value={createIssueBody}
                 onChange={(event) => setCreateIssueBody(event.target.value)}
                 placeholder="Issue description (optional, supports Markdown)"
+                aria-label="Issue description"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"

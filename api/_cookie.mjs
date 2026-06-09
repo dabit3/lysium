@@ -96,9 +96,14 @@ export const parseCookies = (header) => {
     header.split(';').flatMap((part) => {
       const idx = part.indexOf('=')
       if (idx <= 0) return []
-      const k = decodeURIComponent(part.slice(0, idx).trim())
-      const v = decodeURIComponent(part.slice(idx + 1).trim())
-      return k ? [[k, v]] : []
+      try {
+        const k = decodeURIComponent(part.slice(0, idx).trim())
+        const v = decodeURIComponent(part.slice(idx + 1).trim())
+        return k ? [[k, v]] : []
+      } catch {
+        // Skip malformed cookie pairs instead of failing the whole request
+        return []
+      }
     }),
   )
 }

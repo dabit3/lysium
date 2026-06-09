@@ -4,6 +4,7 @@ import { checkRateLimit } from '../_rate-limit.mjs'
 const SESSION_COOKIE_NAME = 'elysium_devin_session'
 const DEVIN_API_BASE = 'https://api.devin.ai/v3'
 const MAX_BODY_BYTES = 10 * 1024 // 10 KB
+const UPSTREAM_TIMEOUT_MS = 30_000
 
 // Only allow the Devin API paths the app actually uses:
 //   /organizations/sessions
@@ -72,15 +73,25 @@ export default async function handler(req, res) {
     }
   }
 
-  const upstreamRes = await fetch(targetUrl, {
-    method: req.method,
-    headers: {
-      Authorization: `Bearer ${session.apiKey}`,
-      'Content-Type': req.headers['content-type'] ?? 'application/json',
-      'User-Agent': 'lysium',
-    },
-    body,
-  })
+  let upstreamRes
+  try {
+    upstreamRes = await fetch(targetUrl, {
+      method: req.method,
+      headers: {
+        Authorization: `Bearer ${session.apiKey}`,
+        'Content-Type': req.headers['content-type'] ?? 'application/json',
+        'User-Agent': 'lysium',
+      },
+      body,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    })
+  } catch (err) {
+    const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError'
+    res.status(504).json({
+      error: timedOut ? 'Devin API request timed out.' : 'Could not reach Devin API.',
+    })
+    return
+  }
 
   const contentType = upstreamRes.headers.get('content-type') ?? 'application/json'
   const responseBody = await upstreamRes.arrayBuffer()
